@@ -13,24 +13,6 @@ app = FastAPI()
 print("Loading model...")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR)
 model = AutoModelForCausalLM.from_pretrained(MODEL_DIR, torch_dtype=torch.float32).to("cuda")
-
-# Fix vocab mismatch: model has 50304 embeddings but tokenizer has 50257
-# Trim embedding and lm_head to actual tokenizer vocab size
-actual_vocab = tokenizer.vocab_size  # 50257
-model_vocab = model.config.vocab_size  # 50304
-if model_vocab > actual_vocab:
-    print(f"Trimming embeddings: {model_vocab} -> {actual_vocab}")
-    with torch.no_grad():
-        model.transformer.wte.weight = torch.nn.Parameter(
-            model.transformer.wte.weight[:actual_vocab]
-        )
-        model.lm_head.weight = torch.nn.Parameter(
-            model.lm_head.weight[:actual_vocab]
-        )
-    model.config.vocab_size = actual_vocab
-    model.config.n_embd = model.config.n_embd  # unchanged, just for clarity
-    print(f"Embeddings trimmed. New vocab_size: {actual_vocab}")
-
 model.eval()
 print(f"Model loaded on GPU. Vocab: {tokenizer.vocab_size}, Model vocab: {model.config.vocab_size}")
 
