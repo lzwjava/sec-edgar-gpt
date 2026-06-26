@@ -1,16 +1,3 @@
----
-language:
-- en
-license: mit
-library_name: transformers
-tags:
-- finance
-- sec-filings
-- edgar
-- gpt2
-- nanoGPT
----
-
 # SEC-EDGAR GPT-2 124M
 
 A GPT-2 (124M) language model trained from scratch on SEC EDGAR filings (10-K, 10-Q, 8-K, etc.).
