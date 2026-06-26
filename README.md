@@ -60,7 +60,7 @@ Trained with [nanoGPT](https://github.com/karpathy/nanoGPT). Training config ava
   author = {Zhiwei Li},
   title = {SEC-EDGAR GPT-2 124M},
   year = {2026},
-  publisher = {HuggingFace},
-  url = {https://huggingface.co/lzwjava/sec-edgar-gpt}
+  publisher = {GitHub},
+  url = {https://github.com/lzwjava/sec-edgar-gpt}
 }
 ```
