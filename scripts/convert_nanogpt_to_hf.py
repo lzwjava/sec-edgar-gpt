@@ -1,107 +1,99 @@
 #!/usr/bin/env python3
-"""Convert nanoGPT-layout safetensors to proper HuggingFace GPT2LMHeadModel format.
+"""Convert nanoGPT checkpoint to proper HuggingFace GPT2LMHeadModel format.
 
-The source model has transposed linear weights and no biases (nanoGPT convention).
-This script transposes the weights to transformers layout and adds zero biases.
+Source: /mnt/data/nanoGPT/out-sec-edgar-124m/ckpt.pt (nanoGPT, bias=False, vocab=50304)
+Dest:   /mnt/data/sec-edgar-gpt-124m-model/ (HF format, vocab_size=50257, with zero biases)
 """
 import torch
 import json
+import shutil
 from pathlib import Path
-from safetensors import safe_open
 from safetensors.torch import save_file
+from safetensors import safe_open
 
-SRC_DIR = "/workspace/model/hf-model"
-DST_DIR = "/workspace/model/hf-model-converted"
+SRC_CKPT = "/mnt/data/nanoGPT/out-sec-edgar-124m/ckpt.pt"
+SRC_TOKENIZER = "/mnt/data/sec-edgar-gpt-124m/tokenizer.json"
+SRC_TOKENIZER_CFG = "/mnt/data/sec-edgar-gpt-124m/tokenizer_config.json"
+SRC_GEN_CFG = "/mnt/data/sec-edgar-gpt-124m/generation_config.json"
+DST_DIR = "/mnt/data/sec-edgar-gpt-124m-model"
+
+ACTUAL_VOCAB = 50257
 
 def main():
-    src = Path(SRC_DIR)
     dst = Path(DST_DIR)
     dst.mkdir(parents=True, exist_ok=True)
 
-    # Load source tensors
-    print("Loading source tensors...")
-    tensors = {}
-    with safe_open(str(src / "model.safetensors"), framework="pt") as f:
-        for key in f.keys():
-            tensors[key] = f.get_tensor(key)
+    print("Loading nanoGPT checkpoint...")
+    ckpt = torch.load(SRC_CKPT, map_location="cpu", weights_only=False)
+    sd = ckpt["model"]
+    cfg = ckpt.get("config", {})
+    has_bias = cfg.get("bias", False)
 
-    # Convert weights
-    new_tensors = {}
-    for key, tensor in tensors.items():
-        if key == "transformer.wte.weight" or key == "transformer.wpe.weight" or key == "lm_head.weight":
-            # Embedding and lm_head: keep as-is
-            new_tensors[key] = tensor
-        elif key.endswith(".weight"):
-            # Linear layer weights: transpose from nanoGPT layout to transformers layout
-            # nanoGPT: [out_features, in_features] -> transformers: [in_features, out_features]
-            new_tensors[key] = tensor.t().contiguous()
-        else:
-            new_tensors[key] = tensor
+    print(f"Config: bias={has_bias}, n_layer={cfg.get('n_layer')}, n_embd={cfg.get('n_embd')}")
+    print(f"Checkpoint keys: {len(sd)}")
 
-    # Add missing biases (zeros)
-    # Layer norm biases
-    n_layer = 12
-    n_embd = 768
-    n_inner = 3072
+    padded_vocab = sd["transformer.wte.weight"].shape[0]
+    n_layer = cfg.get("n_layer", 12)
+    n_embd = cfg.get("n_embd", 768)
+    n_inner = cfg.get("n_embd", 768) * 4  # 3072
+
+    print(f"Vocab: {padded_vocab} -> {ACTUAL_VOCAB}")
+    print(f"Layers: {n_layer}, Embd: {n_embd}, Inner: {n_inner}")
+
+    new_sd = {}
+
+    # Embeddings (trim vocab padding)
+    new_sd["transformer.wte.weight"] = sd["transformer.wte.weight"][:ACTUAL_VOCAB].contiguous()
+    new_sd["transformer.wpe.weight"] = sd["transformer.wpe.weight"].contiguous()
 
     for i in range(n_layer):
-        prefix = f"transformer.h.{i}"
-        # ln_1 bias
-        k = f"{prefix}.ln_1.bias"
-        if k not in new_tensors:
-            new_tensors[k] = torch.zeros(n_embd)
-            print(f"  Added: {k}")
+        sp = f"transformer.h.{i}"
 
-        # ln_2 bias
-        k = f"{prefix}.ln_2.bias"
-        if k not in new_tensors:
-            new_tensors[k] = torch.zeros(n_embd)
-            print(f"  Added: {k}")
+        # Layer norms
+        new_sd[f"{sp}.ln_1.weight"] = sd[f"{sp}.ln_1.weight"].contiguous()
+        new_sd[f"{sp}.ln_1.bias"] = sd.get(f"{sp}.ln_1.bias", torch.zeros(n_embd))
+        new_sd[f"{sp}.ln_2.weight"] = sd[f"{sp}.ln_2.weight"].contiguous()
+        new_sd[f"{sp}.ln_2.bias"] = sd.get(f"{sp}.ln_2.bias", torch.zeros(n_embd))
 
-        # attn.c_attn bias
-        k = f"{prefix}.attn.c_attn.bias"
-        if k not in new_tensors:
-            new_tensors[k] = torch.zeros(3 * n_embd)  # 2304
-            print(f"  Added: {k}")
+        # Attention: nanoGPT [out, in] -> transformers GPT2Conv1D [in, out]
+        w = sd[f"{sp}.attn.c_attn.weight"]  # [2304, 768]
+        new_sd[f"{sp}.attn.c_attn.weight"] = w.t().contiguous()  # [768, 2304]
+        new_sd[f"{sp}.attn.c_attn.bias"] = sd.get(f"{sp}.attn.c_attn.bias", torch.zeros(3 * n_embd))
 
-        # attn.c_proj bias
-        k = f"{prefix}.attn.c_proj.bias"
-        if k not in new_tensors:
-            new_tensors[k] = torch.zeros(n_embd)
-            print(f"  Added: {k}")
+        w = sd[f"{sp}.attn.c_proj.weight"]  # [768, 768]
+        new_sd[f"{sp}.attn.c_proj.weight"] = w.t().contiguous()  # [768, 768]
+        new_sd[f"{sp}.attn.c_proj.bias"] = sd.get(f"{sp}.attn.c_proj.bias", torch.zeros(n_embd))
 
-        # mlp.c_fc bias
-        k = f"{prefix}.mlp.c_fc.bias"
-        if k not in new_tensors:
-            new_tensors[k] = torch.zeros(n_inner)
-            print(f"  Added: {k}")
+        # MLP: same transpose
+        w = sd[f"{sp}.mlp.c_fc.weight"]  # [3072, 768]
+        new_sd[f"{sp}.mlp.c_fc.weight"] = w.t().contiguous()  # [768, 3072]
+        new_sd[f"{sp}.mlp.c_fc.bias"] = sd.get(f"{sp}.mlp.c_fc.bias", torch.zeros(n_inner))
 
-        # mlp.c_proj bias
-        k = f"{prefix}.mlp.c_proj.bias"
-        if k not in new_tensors:
-            new_tensors[k] = torch.zeros(n_embd)
-            print(f"  Added: {k}")
+        w = sd[f"{sp}.mlp.c_proj.weight"]  # [768, 3072]
+        new_sd[f"{sp}.mlp.c_proj.weight"] = w.t().contiguous()  # [3072, 768]
+        new_sd[f"{sp}.mlp.c_proj.bias"] = sd.get(f"{sp}.mlp.c_proj.bias", torch.zeros(n_embd))
 
-    # transformer.ln_f bias
-    k = "transformer.ln_f.bias"
-    if k not in new_tensors:
-        new_tensors[k] = torch.zeros(n_embd)
-        print(f"  Added: {k}")
+    # Final layer norm
+    new_sd["transformer.ln_f.weight"] = sd["transformer.ln_f.weight"].contiguous()
+    new_sd["transformer.ln_f.bias"] = sd.get("transformer.ln_f.bias", torch.zeros(n_embd))
 
-    # Save converted model
-    print(f"\nSaving to {dst}...")
-    save_file(new_tensors, str(dst / "model.safetensors"))
+    # lm_head (trim vocab, clone to avoid shared memory with wte)
+    new_sd["lm_head.weight"] = sd["lm_head.weight"][:ACTUAL_VOCAB].clone().contiguous()
 
-    # Copy config with proper transformers metadata
+    # Save
+    print("\nSaving model.safetensors...")
+    save_file(new_sd, str(dst / "model.safetensors"))
+
+    # Config
     config = {
         "architectures": ["GPT2LMHeadModel"],
         "model_type": "gpt2",
-        "vocab_size": 50257,
-        "n_positions": 1024,
-        "n_embd": 768,
-        "n_layer": 12,
-        "n_head": 12,
-        "n_inner": 3072,
+        "vocab_size": ACTUAL_VOCAB,
+        "n_positions": cfg.get("n_positions", 1024),
+        "n_embd": n_embd,
+        "n_layer": n_layer,
+        "n_head": cfg.get("n_head", 12),
+        "n_inner": n_inner,
         "activation_function": "gelu_new",
         "resid_pdrop": 0.0,
         "embd_pdrop": 0.0,
@@ -121,23 +113,25 @@ def main():
         json.dump(config, f, indent=2)
 
     # Copy tokenizer files
-    import shutil
-    for fname in ["tokenizer.json", "tokenizer_config.json", "generation_config.json"]:
-        src_file = src / fname
-        if src_file.exists():
-            shutil.copy2(src_file, dst / fname)
-            print(f"  Copied: {fname}")
+    for src_path in [SRC_TOKENIZER, SRC_TOKENIZER_CFG, SRC_GEN_CFG]:
+        p = Path(src_path)
+        if p.exists():
+            shutil.copy2(p, dst / p.name)
+            print(f"Copied: {p.name}")
 
-    # Verify shapes
-    print("\nVerifying converted shapes...")
+    # Verify
+    print("\n=== Verification ===")
     with safe_open(str(dst / "model.safetensors"), framework="pt") as f:
-        for key in sorted(f.keys())[:12]:
-            print(f"  {key}: {f.get_tensor(key).shape}")
+        for key in sorted(f.keys()):
+            t = f.get_tensor(key)
+            print(f"  {key}: {t.shape}")
 
-    print(f"\nDone! Converted model at {dst}")
-    print(f"  Vocab size: 50257 (no padding)")
-    print(f"  All biases: present (zeros)")
-    print(f"  Linear weights: transposed to transformers layout")
+    sz = (dst / "model.safetensors").stat().st_size
+    print(f"\nDone! {DST_DIR}")
+    print(f"  Size: {sz / 1024 / 1024:.1f} MB")
+    print(f"  Vocab: {ACTUAL_VOCAB} (trimmed from {padded_vocab})")
+    print(f"  Biases: zeros (original training had bias=False)")
+    print(f"  Weights: transposed to transformers GPT2Conv1D layout")
 
 if __name__ == "__main__":
     main()
