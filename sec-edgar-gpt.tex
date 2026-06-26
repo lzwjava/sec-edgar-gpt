@@ -197,6 +197,13 @@ The following figure shows the training progress captured from the nanoGPT train
 \label{fig:training-loss}
 \end{figure}
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{paper3.png}
+\caption{Training completion screenshot showing iteration 47,400 reached on the RTX 4070 workstation accessed remotely from macOS. The training completed successfully with a final validation loss of 2.28.}
+\label{fig:training-complete}
+\end{figure}
+
 \subsection{Training Efficiency}
 
 Training achieved approximately 12.8\% model FLOPs utilization (MFU) on the RTX 4070, with a real throughput of 0.72 seconds per step (including evaluation and checkpointing overhead). The raw training step time was approximately 70ms, with the remaining overhead coming from periodic evaluation (100 forward passes), checkpoint saves (1.49GB file writes), and data loading.
