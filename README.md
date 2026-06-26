@@ -53,6 +53,20 @@ print(tokenizer.decode(output[0]))
 
 Trained with [nanoGPT](https://github.com/karpathy/nanoGPT). Training config available in the [source repo](https://github.com/lzwjava/sec-edgar-gpt).
 
+## Development Notes
+
+| Date | Topic | Notes |
+|------|-------|-------|
+| 2026-06-25 | [10-K Download Summary](notes/2026-06-25-sec-edgar-10-k-download-summary-en.md) | SEC EDGAR 10-K filing download process |
+| 2026-06-25 | [Financial Pretraining Corpus](notes/2026-06-25-sec-edgar-financial-pretraining-corpus-en.md) | Corpus preparation and tokenization |
+| 2026-06-26 | [GPT-2 on SEC-EDGAR Data](notes/2026-06-26-gpt-2-on-sec-edgar-data-en.md) | Paper structure and training overview |
+| 2026-06-26 | [Training Loss Recovery](notes/2026-06-26-sec-edgar-training-loss-recovery-en.md) | Loss spike at 20k steps, recovery analysis |
+| 2026-06-26 | [Prompt File Setup](notes/2026-06-26-sec-edgar-prompt-file-setup-en.md) | Inference prompt configuration |
+| 2026-06-26 | [Model Quality Check](notes/2026-06-26-sec-edgar-model-quality-check-en.md) | Output quality evaluation |
+| 2026-06-26 | [124M Generation Test](notes/2026-06-26-sec-edgar-124m-generation-test-en.md) | Generation samples across prompts |
+| 2026-06-26 | [124M Generation Review](notes/2026-06-26-sec-edgar-124m-generation-review-en.md) | Detailed review of generated outputs |
+| 2026-06-26 | [124M Upload](notes/2026-06-26-sec-edgar-gpt-124m-upload-en.md) | Model upload to HuggingFace |
+
 ## Citation
 
 ```bibtex
