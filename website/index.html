@@ -6,78 +6,111 @@
 <title>SEC-EDGAR-GPT: A 124M Financial Language Model</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1a1a1a; line-height: 1.7; background: #fafafa; }
+
+  :root {
+    --bg: #fafafa; --bg2: #fff; --bg3: #f8f8f8; --bg4: #f8f9fa;
+    --text: #1a1a1a; --text2: #333; --text3: #555; --text4: #666; --text5: #888;
+    --border: #eee; --border2: #e0e0e0; --border3: #f0f0f0;
+    --accent: #0066cc; --accent-bg: #e8f4fd;
+    --tag-green-bg: #e8f5e9; --tag-green: #2e7d32;
+    --tag-orange-bg: #fff3e0; --tag-orange: #e65100;
+    --tag-red-bg: #fce4ec; --tag-red: #c62828;
+    --code-bg: #1e1e1e; --code-text: #d4d4d4;
+    --sample-bg: #f8f9fa; --generated-bg: #fff;
+  }
+
+  .dark {
+    --bg: #0d1117; --bg2: #161b22; --bg3: #1c2128; --bg4: #1c2128;
+    --text: #e6edf3; --text2: #d2d8e0; --text3: #adbac7; --text4: #96a0ad; --text5: #768390;
+    --border: #30363d; --border2: #373e47; --border3: #21262d;
+    --accent: #58a6ff; --accent-bg: #12243b;
+    --tag-green-bg: #12261e; --tag-green: #56d364;
+    --tag-orange-bg: #2a1f0e; --tag-orange: #e3b341;
+    --tag-red-bg: #2d1215; --tag-red: #f85149;
+    --code-bg: #161b22; --code-text: #d4d4d4;
+    --sample-bg: #161b22; --generated-bg: #0d1117;
+  }
+
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--text); line-height: 1.7; background: var(--bg); transition: background 0.3s, color 0.3s; }
   .container { max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  /* Theme toggle */
+  .theme-toggle { position: fixed; top: 1.2rem; right: 1.5rem; z-index: 100; background: var(--bg2); border: 1px solid var(--border); border-radius: 50%; width: 42px; height: 42px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; transition: all 0.3s; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .theme-toggle:hover { transform: scale(1.1); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  .dark .theme-toggle { box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+  .theme-toggle .sun, .theme-toggle .moon { transition: opacity 0.3s; }
+  .theme-toggle .moon { display: none; }
+  .dark .theme-toggle .sun { display: none; }
+  .dark .theme-toggle .moon { display: block; }
 
   /* Hero */
   .hero { text-align: center; padding: 3rem 0 2rem; }
   .hero h1 { font-size: 2.4rem; margin-bottom: 0.5rem; letter-spacing: -0.02em; }
-  .hero .subtitle { color: #555; font-size: 1.15rem; margin-bottom: 1.5rem; }
+  .hero .subtitle { color: var(--text3); font-size: 1.15rem; margin-bottom: 1.5rem; }
   .hero .links { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-bottom: 1.5rem; }
-  .hero .links a { background: #fff; border: 1px solid #ddd; padding: 0.6rem 1.4rem; border-radius: 8px; font-weight: 500; color: #0066cc; transition: all 0.15s; }
-  .hero .links a:hover { background: #0066cc; color: #fff; border-color: #0066cc; text-decoration: none; }
+  .hero .links a { background: var(--bg2); border: 1px solid var(--border); padding: 0.6rem 1.4rem; border-radius: 8px; font-weight: 500; color: var(--accent); transition: all 0.15s; }
+  .hero .links a:hover { background: var(--accent); color: #fff; border-color: var(--accent); text-decoration: none; }
   .hero .stats { display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap; margin-top: 1.5rem; }
   .hero .stat { text-align: center; }
-  .hero .stat .num { font-size: 1.8rem; font-weight: 700; color: #1a1a1a; }
-  .hero .stat .label { font-size: 0.85rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+  .hero .stat .num { font-size: 1.8rem; font-weight: 700; color: var(--text); }
+  .hero .stat .label { font-size: 0.85rem; color: var(--text5); text-transform: uppercase; letter-spacing: 0.05em; }
 
   /* Sections */
-  section { background: #fff; border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; border: 1px solid #eee; }
-  h2 { font-size: 1.4rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid #f0f0f0; }
-  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.7rem; color: #333; }
+  section { background: var(--bg2); border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; border: 1px solid var(--border); transition: background 0.3s, border-color 0.3s; }
+  h2 { font-size: 1.4rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--border3); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.7rem; color: var(--text2); }
   p { margin-bottom: 1rem; }
 
   /* Images */
   .figure { margin: 1.5rem 0; text-align: center; }
-  .figure img { max-width: 100%; border-radius: 8px; border: 1px solid #e0e0e0; }
-  .figure .caption { margin-top: 0.6rem; font-size: 0.9rem; color: #666; font-style: italic; }
-
-  /* Image grid */
-  .img-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.5rem 0; }
-  .img-grid .figure { margin: 0; }
+  .figure img { max-width: 100%; border-radius: 8px; border: 1px solid var(--border2); }
+  .figure .caption { margin-top: 0.6rem; font-size: 0.9rem; color: var(--text4); font-style: italic; }
 
   /* Tables */
   table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-  th, td { text-align: left; padding: 0.6rem 1rem; border-bottom: 1px solid #eee; }
-  th { font-weight: 600; background: #f8f8f8; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.03em; }
-  .key { color: #555; width: 200px; }
+  th, td { text-align: left; padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); }
+  th { font-weight: 600; background: var(--bg3); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  .key { color: var(--text3); width: 200px; }
 
   /* Code blocks */
-  pre { background: #1e1e1e; color: #d4d4d4; padding: 1.2rem; border-radius: 8px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; margin: 1rem 0; }
-  pre .comment { color: #6a9955; }
-  pre .keyword { color: #569cd6; }
-  pre .string { color: #ce9178; }
-  pre .number { color: #b5cea8; }
+  pre { background: var(--code-bg); color: var(--code-text); padding: 1.2rem; border-radius: 8px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; margin: 1rem 0; }
 
   /* Generation samples */
-  .sample { background: #f8f9fa; border-radius: 8px; padding: 1.2rem; margin: 1rem 0; border-left: 4px solid #0066cc; }
-  .sample .prompt { font-weight: 600; margin-bottom: 0.5rem; color: #333; }
-  .sample .generated { font-family: "SF Mono", "Fira Code", monospace; font-size: 0.85rem; background: #fff; padding: 1rem; border-radius: 6px; border: 1px solid #e0e0e0; white-space: pre-wrap; line-height: 1.6; }
-  .sample .note { margin-top: 0.6rem; font-size: 0.9rem; color: #666; }
+  .sample { background: var(--sample-bg); border-radius: 8px; padding: 1.2rem; margin: 1rem 0; border-left: 4px solid var(--accent); }
+  .sample .prompt { font-weight: 600; margin-bottom: 0.5rem; color: var(--text2); }
+  .sample .generated { font-family: "SF Mono", "Fira Code", monospace; font-size: 0.85rem; background: var(--generated-bg); padding: 1rem; border-radius: 6px; border: 1px solid var(--border2); white-space: pre-wrap; line-height: 1.6; }
+  .sample .note { margin-top: 0.6rem; font-size: 0.9rem; color: var(--text4); }
 
   /* Lists */
   ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
   li { margin-bottom: 0.4rem; }
 
   /* Tags */
-  .tag { display: inline-block; background: #e8f4fd; color: #0066cc; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 500; margin-right: 0.3rem; }
-  .tag.green { background: #e8f5e9; color: #2e7d32; }
-  .tag.orange { background: #fff3e0; color: #e65100; }
-  .tag.red { background: #fce4ec; color: #c62828; }
+  .tag { display: inline-block; background: var(--accent-bg); color: var(--accent); padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 500; margin-right: 0.3rem; }
+  .tag.green { background: var(--tag-green-bg); color: var(--tag-green); }
+  .tag.orange { background: var(--tag-orange-bg); color: var(--tag-orange); }
+  .tag.red { background: var(--tag-red-bg); color: var(--tag-red); }
 
   /* Footer */
-  .footer { text-align: center; padding: 2rem 0; color: #888; font-size: 0.9rem; border-top: 1px solid #eee; margin-top: 2rem; }
-  .footer a { color: #0066cc; }
+  .footer { text-align: center; padding: 2rem 0; color: var(--text5); font-size: 0.9rem; border-top: 1px solid var(--border); margin-top: 2rem; }
+  .footer a { color: var(--accent); }
+
+  code { background: var(--bg3); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.9em; }
 
   @media (max-width: 600px) {
     .hero h1 { font-size: 1.8rem; }
     .hero .stats { gap: 1rem; }
-    .img-grid { grid-template-columns: 1fr; }
     section { padding: 1.5rem; }
+    .theme-toggle { top: 0.8rem; right: 1rem; }
   }
 </style>
 </head>
 <body>
+<button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+  <span class="sun">☀️</span>
+  <span class="moon">🌙</span>
+</button>
+
 <div class="container">
 
 <!-- Hero -->
@@ -88,7 +121,6 @@
     <a href="https://github.com/lzwjava/sec-edgar-gpt">GitHub</a>
     <a href="https://huggingface.co/lzwjava/sec-edgar-gpt-124m-hf">HuggingFace</a>
     <a href="https://github.com/lzwjava/sec-edgar-gpt/raw/main/sec-edgar-gpt.pdf">Paper (PDF)</a>
-    <a href="https://sec-edgar-gpt.lzwjava.workers.dev">Live Demo</a>
   </div>
   <div class="stats">
     <div class="stat"><div class="num">124M</div><div class="label">Parameters</div></div>
@@ -101,12 +133,8 @@
 <!-- Overview -->
 <section>
   <h2>Overview</h2>
-  <p>
-    SEC-EDGAR-GPT is a 124-million parameter GPT-2 language model trained on 1.55 billion tokens of SEC-EDGAR corporate filings using the nanoGPT framework. The model was trained on a single NVIDIA RTX 4070 GPU over approximately 8 hours, reaching a final validation loss of 2.28.
-  </p>
-  <p>
-    We evaluated the model's generation quality across multiple SEC filing sections including business descriptions, management discussion and analysis, risk factors, financial notes, and proxy statements. The model successfully learns SEC document structure, financial vocabulary, and boilerplate language patterns, but exhibits characteristic limitations in long-range coherence, numerical consistency, and table extension.
-  </p>
+  <p>SEC-EDGAR-GPT is a 124-million parameter GPT-2 language model trained on 1.55 billion tokens of SEC-EDGAR corporate filings using the nanoGPT framework. The model was trained on a single NVIDIA RTX 4070 GPU over approximately 8 hours, reaching a final validation loss of 2.28.</p>
+  <p>We evaluated the model's generation quality across multiple SEC filing sections including business descriptions, management discussion and analysis, risk factors, financial notes, and proxy statements. The model successfully learns SEC document structure, financial vocabulary, and boilerplate language patterns, but exhibits characteristic limitations in long-range coherence, numerical consistency, and table extension.</p>
 </section>
 
 <!-- Training Setup -->
@@ -157,7 +185,7 @@
   <h2>Training Results</h2>
   <div class="figure">
     <img src="images/paper2.png" alt="Training loss curve">
-    <div class="caption">Training and validation loss over 47,000 steps. The model converged from 10.98 to 2.28 validation loss, with a notable spike at step 20,000 (reaching 8.04) before recovering.</div>
+    <div class="caption">Training and validation loss over 47,000 steps. Converged from 10.98 to 2.28 validation loss, with a spike at step 20,000 (8.04) before recovering.</div>
   </div>
 
   <h3>Loss Progression</h3>
@@ -180,23 +208,23 @@
     <tr><td>GitHub Code</td><td>3.466</td><td>Noisy code data</td></tr>
     <tr><td><strong>SEC-EDGAR (this work)</strong></td><td><strong>2.28</strong></td><td><strong>Clean financial prose</strong></td></tr>
   </table>
-  <p>The SEC-EDGAR model achieves significantly lower validation loss than both the general text and code models, likely due to the structured, repetitive nature of SEC filings with highly formulaic language.</p>
+  <p>SEC-EDGAR achieves significantly lower loss than general text and code models, due to the structured, repetitive nature of SEC filings.</p>
 
   <h3>Training Completion</h3>
   <div class="figure">
     <img src="images/paper3.png" alt="Training completion screenshot">
-    <div class="caption">Training completion: iteration 47,000 reached on the RTX 4070 workstation, accessed remotely from macOS.</div>
+    <div class="caption">Training completion: iteration 47,000 on the RTX 4070 workstation, accessed remotely from macOS.</div>
   </div>
 </section>
 
 <!-- Generation Samples -->
 <section>
   <h2>Generation Quality Analysis</h2>
-  <p>We evaluated the model using five prompts representing different SEC filing sections. Each prompt contained 500–2,000 characters of authentic SEC text, generating 1,000 tokens at temperature 0.7 with top-k=100. Evaluation prompts were generated with the assistance of Hermes Agent (Nous Research).</p>
+  <p>Five prompts representing different SEC filing sections. Each prompt: 500–2,000 characters of authentic SEC text. Generated 1,000 tokens at temperature 0.7, top-k=100. Evaluation prompts generated with Hermes Agent (Nous Research).</p>
 
   <h3>Prompt 1: HSBC Business Description</h3>
   <div class="sample">
-    <div class="prompt">Input: HSBC Holdings plc — $2.92T assets, 42M customers, 62 countries, CET1 ratio 14.8%</div>
+    <div class="prompt">Input: HSBC Holdings plc — $2.92T assets, 42M customers, 62 countries, CET1 14.8%</div>
     <div class="generated">On September 10, 2023, we completed the initial public
 offering of 2,000,000 shares of our common stock at a
 price of $8.50 per share, resulting in net proceeds of
@@ -216,13 +244,13 @@ in net proceeds of approximately $8.5 million.</div>
     <div class="note">
       <span class="tag green">Structure</span> Maintains SEC filing format<br>
       <span class="tag orange">Loop</span> Enters "public offering" loop after 2 paragraphs<br>
-      <span class="tag red">Scale</span> HSBC is a trillion-dollar bank but generated offerings are $2–12M
+      <span class="tag red">Scale</span> HSBC is trillion-dollar but generated offerings are $2–12M
     </div>
   </div>
 
   <h3>Prompt 2: DBS Group MD&A</h3>
   <div class="sample">
-    <div class="prompt">Input: DBS Group — SGD 16.5B total income (+22%), NIM 2.12%, cost-income ratio 41.2%</div>
+    <div class="prompt">Input: DBS Group — SGD 16.5B income (+22%), NIM 2.12%, cost-income 41.2%</div>
     <div class="generated">Total operating expenses were flat in the prior year
 due to a significant decline in sales and general and
 administrative expenses.
@@ -234,15 +262,15 @@ and marketing cost of 5.8% in the prior year.
 Net interest income was 41.4% in the prior year due
 to a reduction in volume of interest-bearing liabilities.</div>
     <div class="note">
-      <span class="tag green">Terminology</span> Correct financial vocabulary (NIM, cost-income ratio)<br>
+      <span class="tag green">Terminology</span> Correct financial vocabulary<br>
       <span class="tag red">Currency</span> Switches from SGD to USD<br>
-      <span class="tag red">Logic</span> "Expenses were flat" then "increased $7.8 million"
+      <span class="tag red">Logic</span> "Expenses were flat" then "increased $7.8M"
     </div>
   </div>
 
   <h3>Prompt 3: MD&A Revenue Analysis</h3>
   <div class="sample">
-    <div class="prompt">Input: Revenue growth 28%, cost analysis, gross margin 62.7% → 64.4%</div>
+    <div class="prompt">Input: Revenue growth 28%, gross margin 62.7% → 64.4%</div>
     <div class="generated">Cost of revenue increased by $32.1 million, or 26%, for
 the year ended December 31, 2023, compared to $162.2
 million for the prior year. The increase was primarily
@@ -255,15 +283,15 @@ $107.1 million for the year ended December 31, 2023,
 from $162.8 million for the year ended December 31, 2022.</div>
     <div class="note">
       <span class="tag green">Template</span> Excellent first paragraph — references acquisition (DMR)<br>
-      <span class="tag orange">Loop</span> 10 consecutive "Cost of revenue increased/decreased" paragraphs<br>
-      <span class="tag red">Math</span> Percentages don't match dollar amounts cited
+      <span class="tag orange">Loop</span> 10 consecutive "Cost of revenue" paragraphs<br>
+      <span class="tag red">Math</span> Percentages don't match dollar amounts
     </div>
   </div>
 
-  <h3>Prompt 4: Financial Notes (Revenue Recognition)</h3>
+  <h3>Prompt 4: Financial Notes</h3>
   <div class="sample">
-    <div class="prompt">Input: Revenue table — subscription ($380M), professional services ($89M), hardware ($18M)</div>
-    <div class="generated">[Input table echoed with perfect formatting and alignment]
+    <div class="prompt">Input: Revenue table — subscription $380M, services $89M, hardware $18M</div>
+    <div class="generated">[Input table echoed with perfect formatting]
 
 The aggregate amount of the transaction price allocated
 to remaining performance obligations was $892.3 million,
@@ -271,29 +299,24 @@ of which we expect to recognize approximately 65% as
 revenue during the next 12 months and the remainder
 thereafter.
 
-The table below presents our revenues in the periods
-indicated (in thousands):
-Year Ended December 31,
-
 [blank spaces — model unable to generate table rows]</div>
     <div class="note">
       <span class="tag green">Echo</span> Table perfectly reproduced with exact numbers<br>
-      <span class="tag red">Extend</span> Cannot generate new table rows — collapses to blanks
+      <span class="tag red">Extend</span> Cannot generate new table rows
     </div>
   </div>
 
-  <h3>Prompt 5: Proxy Statement (Executive Compensation)</h3>
+  <h3>Prompt 5: Proxy Statement</h3>
   <div class="sample">
-    <div class="prompt">Input: Executive comp table — CEO $5.48M, CFO $3.59M, CTO $2.97M</div>
-    <div class="generated">[Input table echoed with correct column alignment
-and all three executive rows]
+    <div class="prompt">Input: Executive comp — CEO $5.48M, CFO $3.59M, CTO $2.97M</div>
+    <div class="generated">[Input table echoed correctly with all three rows]
 
 William R. Gras    100,000  $
 
 [blank spaces — model unable to complete the row]</div>
     <div class="note">
-      <span class="tag green">Structure</span> Table structure perfectly preserved<br>
-      <span class="tag orange">Hallucinate</span> Attempted to add 4th executive "William R. Gras"<br>
+      <span class="tag green">Structure</span> Table structure preserved<br>
+      <span class="tag orange">Hallucinate</span> Attempted 4th executive "William R. Gras"<br>
       <span class="tag red">Collapse</span> Immediately collapses after incomplete row
     </div>
   </div>
@@ -357,5 +380,16 @@ William R. Gras    100,000  $
 </div>
 
 </div>
+
+<script>
+function toggleTheme() {
+  document.documentElement.classList.toggle('dark');
+  localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+}
+// Restore saved preference
+if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+  document.documentElement.classList.add('dark');
+}
+</script>
 </body>
 </html>
