@@ -8,4 +8,3 @@ command = ""
 [assets]
 directory = "./website"
 binding = "ASSETS"
-exclude = ["deploy.sh"]
