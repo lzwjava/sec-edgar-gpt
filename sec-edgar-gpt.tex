@@ -27,7 +27,9 @@
   numberstyle=\tiny\color{gray}
 }
 
-\title{SEC-EDGAR-GPT: A 124M Financial Language Model}
+\title{SEC-EDGAR-GPT: A 124M Financial Language Model%
+\thanks{Code: \url{https://github.com/lzwjava/sec-edgar-gpt} \quad
+Model: \url{https://huggingface.co/lzwjava/sec-edgar-gpt-124m-hf}}}
 \author{
   Zhiwei Li\thanks{Independent Researcher. Email: lzwjava@gmail.com.}
 }
@@ -193,7 +195,7 @@ The following figure shows the training progress captured from the nanoGPT train
 \begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{paper2.png}
-\caption{Training loss curve showing convergence over 47,000 steps. The validation loss decreased from 10.98 to 2.28, with a notable spike at step 20,000 (reaching 8.04) before recovering and converging. The model learns SEC filing patterns and financial vocabulary throughout training.}
+\caption{Training loss curve. Evaluation prompts (Section~5) were generated with the assistance of Hermes Agent (Nous Research).}
 \label{fig:training-loss}
 \end{figure}
 
@@ -507,6 +509,12 @@ We have demonstrated that a 124M parameter GPT-2 model can learn SEC-EDGAR docum
 These results suggest that small language models can serve as useful tools for financial document drafting assistance, particularly for generating boilerplate sections and suggesting document structures. However, they cannot replace human expertise for ensuring accuracy and consistency in actual SEC filings.
 
 The SEC-EDGAR corpus presents unique challenges for language models due to its structured nature, numerical density, and strict formatting requirements. Our work provides a baseline for future research on domain-specific financial language models and highlights the trade-offs between model accessibility and generation fidelity.
+
+\section{Code and Model Availability}
+The training code, configuration, and dataset pipeline are released at
+\url{https://github.com/lzwjava/sec-edgar-gpt}. Pretrained weights
+(124M parameters, HF format) are available at
+\url{https://huggingface.co/lzwjava/sec-edgar-gpt-124m-hf}.
 
 \section*{Acknowledgments}
 
