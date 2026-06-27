@@ -222,55 +222,64 @@
   <h2>Generation Quality Analysis</h2>
   <p>Five prompts representing different SEC filing sections. Each prompt: 500–2,000 characters of authentic SEC text. Generated 1,000 tokens at temperature 0.7, top-k=100. Evaluation prompts generated with Hermes Agent (Nous Research).</p>
 
-  <h3>Prompt 1: HSBC Business Description</h3>
+  <h3>Prompt 1: Business Description (Item 1)</h3>
+  <details>
+    <summary style="cursor:pointer;font-weight:600;color:var(--accent);margin-bottom:0.5rem;">Show full prompt (input text)</summary>
+    <div class="generated" style="margin:0.5rem 0 1rem;">ITEM 1. BUSINESS
+
+Overview
+
+We are a leading provider of cloud-based enterprise software solutions for the healthcare industry. Our platform enables hospitals, clinics, and other healthcare organizations to streamline their operations, improve patient outcomes, and reduce costs. We serve over 2,500 customers across 48 states, including 18 of the top 25 hospital systems in the United States.
+
+Our solutions address critical challenges in healthcare delivery, including electronic health records (EHR), practice management, revenue cycle management, and population health analytics. Our AI-powered clinical decision support tools help physicians make better-informed treatment decisions, while our interoperability platform enables seamless data exchange between disparate healthcare systems.
+
+For the fiscal year ended December 31, 2023, we generated revenue of approximately $487.2 million, representing a 28% increase from the prior year. Our subscription revenue, which accounted for 78% of total revenue, grew 35% year-over-year. We had approximately 8,200 full-time employees as of December 31, 2023.</div>
+  </details>
   <div class="sample">
-    <div class="prompt">Input: HSBC Holdings plc — $2.92T assets, 42M customers, 62 countries, CET1 14.8%</div>
-    <div class="generated">On September 10, 2023, we completed the initial public
-offering of 2,000,000 shares of our common stock at a
-price of $8.50 per share, resulting in net proceeds of
-approximately $12.4 million.
+    <div class="prompt">Generated continuation (first 500 tokens):</div>
+    <div class="generated">Our business is heavily dependent on the resources of our
+clinical trials and the discovery and development of our
+product candidates. Our technology costs are based on the
+materials, manufacturing, test, and customer support costs.
 
-Our net revenue for the year ended December 31, 2023
-was $2.5 billion, and revenue of $3.6 billion,
-respectively, on our Cash Balance Sheet.
+We are a global leader in the healthcare industry, and the
+care industry is undergoing a number of product development,
+including the following:
 
-On September 12, 2023, we completed a public offering
-of 2,300,000 shares of our common stock at a public
-offering price of $2.05 per share.
+- Our core product development, product development and
+  commercialization of our product candidates, which we
+  currently license agreements with third-party manufacturers.
 
-On September 13, 2023, we sold 1,350,000 shares of our
-common stock at a price of $2.05 per share, resulting
-in net proceeds of approximately $8.5 million.</div>
+- Our commercialization of X-Avent therapies, including
+  the following:
+
+- Our commercialization of X-Zentib, including the following:
+
+- Our commercialization of X-Zentib, including the following:</div>
     <div class="note">
       <span class="tag green">Structure</span> Maintains SEC filing format<br>
-      <span class="tag orange">Loop</span> Enters "public offering" loop after 2 paragraphs<br>
-      <span class="tag red">Scale</span> HSBC is trillion-dollar but generated offerings are $2–12M
+      <span class="tag orange">Loop</span> "Commercialization of product candidates" repeats 47+ times<br>
+      <span class="tag red">Hallucinate</span> Invented drug names: X-Avent, X-Zentib, S-Zentib, Q-partnerib
     </div>
   </div>
 
-  <h3>Prompt 2: DBS Group MD&A</h3>
+  <h3>Prompt 2: MD&A Revenue Analysis</h3>
+  <details>
+    <summary style="cursor:pointer;font-weight:600;color:var(--accent);margin-bottom:0.5rem;">Show full prompt (input text)</summary>
+    <div class="generated" style="margin:0.5rem 0 1rem;">ITEM 7. MANAGEMENT'S DISCUSSION AND ANALYSIS OF FINANCIAL CONDITION AND RESULTS OF OPERATIONS
+
+Results of Operations
+
+Revenue
+
+Total revenue increased by $105.4 million, or 28%, to $487.2 million for the year ended December 31, 2023, from $381.8 million for the year ended December 31, 2022. The increase was primarily attributable to growth in subscription revenue, which increased by $98.2 million, or 35%, driven by new customer acquisitions and expanded usage from existing customers. Professional services revenue increased by $7.2 million, or 8%, reflecting increased implementation activity.
+
+Cost of Revenue and Gross Profit
+
+Cost of revenue increased by $31.2 million, or 22%, to $173.4 million for the year ended December 31, 2023, from $142.2 million for the year ended December 31, 2022. The increase was primarily due to higher hosting costs associated with our cloud infrastructure and increased headcount in our customer support organization. Gross profit margin improved to 64.4% for the year ended December 31, 2023, compared to 62.7% for the prior year, reflecting economies of scale in our cloud infrastructure.</div>
+  </details>
   <div class="sample">
-    <div class="prompt">Input: DBS Group — SGD 16.5B income (+22%), NIM 2.12%, cost-income 41.2%</div>
-    <div class="generated">Total operating expenses were flat in the prior year
-due to a significant decline in sales and general and
-administrative expenses.
-
-Non-interest expenses increased $7.8 million, or 12.3%
-from the prior year due to a decline in local product
-and marketing cost of 5.8% in the prior year.
-
-Net interest income was 41.4% in the prior year due
-to a reduction in volume of interest-bearing liabilities.</div>
-    <div class="note">
-      <span class="tag green">Terminology</span> Correct financial vocabulary<br>
-      <span class="tag red">Currency</span> Switches from SGD to USD<br>
-      <span class="tag red">Logic</span> "Expenses were flat" then "increased $7.8M"
-    </div>
-  </div>
-
-  <h3>Prompt 3: MD&A Revenue Analysis</h3>
-  <div class="sample">
-    <div class="prompt">Input: Revenue growth 28%, gross margin 62.7% → 64.4%</div>
+    <div class="prompt">Generated continuation (first 400 tokens):</div>
     <div class="generated">Cost of revenue increased by $32.1 million, or 26%, for
 the year ended December 31, 2023, compared to $162.2
 million for the prior year. The increase was primarily
@@ -280,44 +289,65 @@ of DMR in the year ended December 31, 2023.
 
 Cost of revenue increased by $40.0 million, or 2%, to
 $107.1 million for the year ended December 31, 2023,
-from $162.8 million for the year ended December 31, 2022.</div>
+from $162.8 million for the year ended December 31, 2022.
+The increase was primarily attributable to the increase
+in service revenue, partially offset by depreciation on
+certain C-1 products, which increased by $73.4 million,
+or 1%, from $96.0 million for the year ended December 31,
+2023.
+
+Cost of revenue increased by $20.5 million, or 2%, to
+$1.8 million for the year ended December 31, 2023,
+primarily due to the increase in service revenue and the
+increased amortization of intangible assets.</div>
     <div class="note">
       <span class="tag green">Template</span> Excellent first paragraph — references acquisition (DMR)<br>
-      <span class="tag orange">Loop</span> 10 consecutive "Cost of revenue" paragraphs<br>
-      <span class="tag red">Math</span> Percentages don't match dollar amounts
+      <span class="tag orange">Loop</span> 10 consecutive "Cost of revenue increased/decreased" paragraphs<br>
+      <span class="tag red">Math</span> Percentages don't match dollar amounts cited
     </div>
   </div>
 
-  <h3>Prompt 4: Financial Notes</h3>
+  <h3>Prompt 3: Risk Factors</h3>
+  <details>
+    <summary style="cursor:pointer;font-weight:600;color:var(--accent);margin-bottom:0.5rem;">Show full prompt (input text)</summary>
+    <div class="generated" style="margin:0.5rem 0 1rem;">RISK FACTORS
+
+Risks Related to Our Business
+
+We have a history of net losses and may not achieve or maintain profitability in the future.
+
+We incurred net losses of $42.3 million, $67.8 million, and $89.1 million for the years ended December 31, 2023, 2022, and 2021, respectively. As of December 31, 2023, we had an accumulated deficit of $523.4 million. We expect to continue to incur significant expenses related to research and development, sales and marketing, and general administrative operations as we expand our business. We may not achieve or maintain profitability in the future.
+
+Our quarterly operating results may fluctuate significantly, which could cause our stock price to decline.
+
+Our quarterly revenue and operating results have varied in the past and may continue to vary significantly from quarter to quarter. Our revenue growth rate may decline in future periods as our revenue base increases. Factors that may cause our quarterly results to fluctuate include the timing of large enterprise contracts, seasonal purchasing patterns in the healthcare industry, and the impact of regulatory changes on customer buying decisions.</div>
+  </details>
   <div class="sample">
-    <div class="prompt">Input: Revenue table — subscription $380M, services $89M, hardware $18M</div>
-    <div class="generated">[Input table echoed with perfect formatting]
+    <div class="prompt">Generated continuation (first 500 tokens):</div>
+    <div class="generated">We have financed and expect to continue to incur losses
+and we may not achieve profitability in the future.
 
-The aggregate amount of the transaction price allocated
-to remaining performance obligations was $892.3 million,
-of which we expect to recognize approximately 65% as
-revenue during the next 12 months and the remainder
-thereafter.
+We have incurred significant losses since inception and
+expect our net losses since inception and expect to
+continue to incur losses and we may never achieve
+profitability through the development and
+commercialization of our product candidates. Many of our
+product candidates are in development, and we have not
+yet generated any revenue from product sales.
 
-[blank spaces — model unable to generate table rows]</div>
+We continue to develop and market new products and
+technologies in the development and commercialization of
+our product candidates, and as a result, our revenues
+from product sales and marketing, are subject to product
+commercialization and regulatory requirements.
+
+Our product candidates may fail to develop, develop and
+commercialize our product candidates may fail to develop
+and commercialize our product candidates.</div>
     <div class="note">
-      <span class="tag green">Echo</span> Table perfectly reproduced with exact numbers<br>
-      <span class="tag red">Extend</span> Cannot generate new table rows
-    </div>
-  </div>
-
-  <h3>Prompt 5: Proxy Statement</h3>
-  <div class="sample">
-    <div class="prompt">Input: Executive comp — CEO $5.48M, CFO $3.59M, CTO $2.97M</div>
-    <div class="generated">[Input table echoed correctly with all three rows]
-
-William R. Gras    100,000  $
-
-[blank spaces — model unable to complete the row]</div>
-    <div class="note">
-      <span class="tag green">Structure</span> Table structure preserved<br>
-      <span class="tag orange">Hallucinate</span> Attempted 4th executive "William R. Gras"<br>
-      <span class="tag red">Collapse</span> Immediately collapses after incomplete row
+      <span class="tag green">Structure</span> Maintains risk factor format (heading + explanation)<br>
+      <span class="tag orange">Loop</span> "Product candidates" appears 47 times in 25 lines<br>
+      <span class="tag red">Self-ref</span> Recursive: "product candidates may fail to develop, develop and commercialize"
     </div>
   </div>
 </section>
