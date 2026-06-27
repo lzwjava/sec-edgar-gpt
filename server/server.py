@@ -24,9 +24,39 @@ SEC_SYSTEM = (
 
 MIN_PROMPT_CHARS = 10
 
-def _generate(input_ids, max_new_tokens, temperature, top_p):
+class RepetitionPenaltyLogitsWarper:
+    """Applies frequency_penalty and presence_penalty like OpenAI."""
+    def __init__(self, frequency_penalty: float, presence_penalty: float):
+        self.frequency_penalty = frequency_penalty
+        self.presence_penalty = presence_penalty
+
+    def __call__(self, input_ids: torch.Tensor, scores: torch.Tensor) -> torch.Tensor:
+        if self.frequency_penalty == 0.0 and self.presence_penalty == 0.0:
+            return scores
+        for i in range(input_ids.shape[0]):
+            token_counts = torch.bincount(input_ids[i], minlength=scores.shape[-1]).float()
+            # presence_penalty: -1 if token appeared at all
+            # frequency_penalty: -count * penalty
+            penalty = token_counts * self.frequency_penalty
+            penalty += (token_counts > 0).float() * self.presence_penalty
+            scores[i] -= penalty
+        return scores
+
+
+def _generate(input_ids, max_new_tokens, temperature, top_p,
+              frequency_penalty=0.0, presence_penalty=0.0, stop=None, seed=None,
+              n=1):
     """Shared generate wrapper with proper attention_mask and pad_token_id."""
+    if seed is not None:
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
     attention_mask = torch.ones_like(input_ids)
+    # Build logits processor list
+    logits_processors = []
+    if frequency_penalty != 0.0 or presence_penalty != 0.0:
+        logits_processors.append(
+            RepetitionPenaltyLogitsWarper(frequency_penalty, presence_penalty)
+        )
     with torch.no_grad():
         output = model.generate(
             input_ids,
@@ -36,8 +66,22 @@ def _generate(input_ids, max_new_tokens, temperature, top_p):
             top_p=top_p or 0.9,
             do_sample=True,
             pad_token_id=EOS_ID,
+            num_return_sequences=n,
+            logits_processor=logits_processors or None,
         )
-    return output
+    # Post-process: truncate at first stop sequence
+    results = []
+    prompt_len = input_ids.shape[1]
+    for seq in output:
+        gen_ids = seq[prompt_len:]
+        text = tokenizer.decode(gen_ids, skip_special_tokens=True)
+        if stop:
+            for s in stop:
+                idx = text.find(s)
+                if idx != -1:
+                    text = text[:idx]
+        results.append((gen_ids, text))
+    return results
 
 class CompletionRequest(BaseModel):
     model: str = "sec-edgar-gpt-124m"
@@ -45,6 +89,11 @@ class CompletionRequest(BaseModel):
     max_tokens: int = 100
     temperature: float = 0.7
     top_p: float = 0.9
+    n: int = 1
+    stop: Optional[List[str]] = None
+    frequency_penalty: float = 0.0
+    presence_penalty: float = 0.0
+    seed: Optional[int] = None
     stream: bool = False
 
 class ChatMessage(BaseModel):
@@ -57,6 +106,11 @@ class ChatRequest(BaseModel):
     max_tokens: int = 100
     temperature: float = 0.7
     top_p: float = 0.9
+    n: int = 1
+    stop: Optional[List[str]] = None
+    frequency_penalty: float = 0.0
+    presence_penalty: float = 0.0
+    seed: Optional[int] = None
     stream: bool = False
 
 @app.get("/")
@@ -70,20 +124,24 @@ async def completions(req: CompletionRequest):
         raise HTTPException(400, f"Prompt must be at least {MIN_PROMPT_CHARS} characters")
     prompt = SEC_SYSTEM + req.prompt
     input_ids = tokenizer.encode(prompt, return_tensors="pt").to("cuda")
-    t0 = time.time()
-    output = _generate(input_ids, req.max_tokens, req.temperature, req.top_p)
-    gen_ids = output[0][input_ids.shape[1]:]
-    text = tokenizer.decode(gen_ids, skip_special_tokens=True)
+    results = _generate(
+        input_ids, req.max_tokens, req.temperature, req.top_p,
+        frequency_penalty=req.frequency_penalty, presence_penalty=req.presence_penalty,
+        stop=req.stop, seed=req.seed, n=req.n,
+    )
+    choices = []
+    for i, (gen_ids, text) in enumerate(results):
+        choices.append({"text": text, "index": i, "finish_reason": "stop"})
     return {
         "id": f"cmpl-{uuid.uuid4().hex[:8]}",
         "object": "text_completion",
         "created": int(time.time()),
         "model": req.model,
-        "choices": [{"text": text, "index": 0, "finish_reason": "stop"}],
+        "choices": choices,
         "usage": {
             "prompt_tokens": input_ids.shape[1],
-            "completion_tokens": len(gen_ids),
-            "total_tokens": input_ids.shape[1] + len(gen_ids),
+            "completion_tokens": sum(len(gi) for gi, _ in results),
+            "total_tokens": input_ids.shape[1] + sum(len(gi) for gi, _ in results),
         },
     }
 
@@ -95,23 +153,31 @@ async def chat_completions(req: ChatRequest):
         raise HTTPException(400, f"Message must be at least {MIN_PROMPT_CHARS} characters")
     prompt = SEC_SYSTEM + user_text + "\nassistant: "
     input_ids = tokenizer.encode(prompt, return_tensors="pt").to("cuda")
-    t0 = time.time()
-    output = _generate(input_ids, req.max_tokens, req.temperature, req.top_p)
-    gen_ids = output[0][input_ids.shape[1]:]
-    text = tokenizer.decode(gen_ids, skip_special_tokens=True)
-    # Trim at first newline after a reasonable length to avoid run-on
-    if "\n" in text[20:]:
-        text = text[:text.index("\n", 20)]
+    results = _generate(
+        input_ids, req.max_tokens, req.temperature, req.top_p,
+        frequency_penalty=req.frequency_penalty, presence_penalty=req.presence_penalty,
+        stop=req.stop, seed=req.seed, n=req.n,
+    )
+    choices = []
+    for i, (gen_ids, text) in enumerate(results):
+        # Trim at first newline after a reasonable length to avoid run-on
+        if "\n" in text[20:]:
+            text = text[:text.index("\n", 20)]
+        choices.append({
+            "message": {"role": "assistant", "content": text.strip()},
+            "index": i,
+            "finish_reason": "stop",
+        })
     return {
         "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
         "object": "chat.completion",
         "created": int(time.time()),
         "model": req.model,
-        "choices": [{"message": {"role": "assistant", "content": text.strip()}, "index": 0, "finish_reason": "stop"}],
+        "choices": choices,
         "usage": {
             "prompt_tokens": input_ids.shape[1],
-            "completion_tokens": len(gen_ids),
-            "total_tokens": input_ids.shape[1] + len(gen_ids),
+            "completion_tokens": sum(len(gi) for gi, _ in results),
+            "total_tokens": input_ids.shape[1] + sum(len(gi) for gi, _ in results),
         },
     }
 
