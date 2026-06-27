@@ -3,75 +3,357 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SEC-EDGAR-GPT</title>
+<title>SEC-EDGAR-GPT: A 124M Financial Language Model</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1a1a1a; line-height: 1.6; }
-  .container { max-width: 720px; margin: 0 auto; padding: 2rem 1.5rem; }
-  h1 { font-size: 2rem; margin-bottom: 0.5rem; }
-  .subtitle { color: #555; font-size: 1.1rem; margin-bottom: 2rem; }
-  h2 { font-size: 1.3rem; margin: 2rem 0 0.8rem; border-bottom: 1px solid #ddd; padding-bottom: 0.3rem; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1a1a1a; line-height: 1.7; background: #fafafa; }
+  .container { max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  /* Hero */
+  .hero { text-align: center; padding: 3rem 0 2rem; }
+  .hero h1 { font-size: 2.4rem; margin-bottom: 0.5rem; letter-spacing: -0.02em; }
+  .hero .subtitle { color: #555; font-size: 1.15rem; margin-bottom: 1.5rem; }
+  .hero .links { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .hero .links a { background: #fff; border: 1px solid #ddd; padding: 0.6rem 1.4rem; border-radius: 8px; font-weight: 500; color: #0066cc; transition: all 0.15s; }
+  .hero .links a:hover { background: #0066cc; color: #fff; border-color: #0066cc; text-decoration: none; }
+  .hero .stats { display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap; margin-top: 1.5rem; }
+  .hero .stat { text-align: center; }
+  .hero .stat .num { font-size: 1.8rem; font-weight: 700; color: #1a1a1a; }
+  .hero .stat .label { font-size: 0.85rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* Sections */
+  section { background: #fff; border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; border: 1px solid #eee; }
+  h2 { font-size: 1.4rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid #f0f0f0; }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.7rem; color: #333; }
   p { margin-bottom: 1rem; }
-  a { color: #0066cc; text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  .links { display: flex; gap: 1.5rem; margin-bottom: 2rem; flex-wrap: wrap; }
-  .links a { background: #f5f5f5; padding: 0.6rem 1.2rem; border-radius: 6px; font-weight: 500; }
-  .links a:hover { background: #e8e8e8; text-decoration: none; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
-  th, td { text-align: left; padding: 0.5rem 0.8rem; border-bottom: 1px solid #eee; }
-  th { font-weight: 600; }
+
+  /* Images */
+  .figure { margin: 1.5rem 0; text-align: center; }
+  .figure img { max-width: 100%; border-radius: 8px; border: 1px solid #e0e0e0; }
+  .figure .caption { margin-top: 0.6rem; font-size: 0.9rem; color: #666; font-style: italic; }
+
+  /* Image grid */
+  .img-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.5rem 0; }
+  .img-grid .figure { margin: 0; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+  th, td { text-align: left; padding: 0.6rem 1rem; border-bottom: 1px solid #eee; }
+  th { font-weight: 600; background: #f8f8f8; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.03em; }
   .key { color: #555; width: 200px; }
-  ul { padding-left: 1.5rem; margin-bottom: 1rem; }
-  li { margin-bottom: 0.3rem; }
-  .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ddd; color: #888; font-size: 0.9rem; }
+
+  /* Code blocks */
+  pre { background: #1e1e1e; color: #d4d4d4; padding: 1.2rem; border-radius: 8px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; margin: 1rem 0; }
+  pre .comment { color: #6a9955; }
+  pre .keyword { color: #569cd6; }
+  pre .string { color: #ce9178; }
+  pre .number { color: #b5cea8; }
+
+  /* Generation samples */
+  .sample { background: #f8f9fa; border-radius: 8px; padding: 1.2rem; margin: 1rem 0; border-left: 4px solid #0066cc; }
+  .sample .prompt { font-weight: 600; margin-bottom: 0.5rem; color: #333; }
+  .sample .generated { font-family: "SF Mono", "Fira Code", monospace; font-size: 0.85rem; background: #fff; padding: 1rem; border-radius: 6px; border: 1px solid #e0e0e0; white-space: pre-wrap; line-height: 1.6; }
+  .sample .note { margin-top: 0.6rem; font-size: 0.9rem; color: #666; }
+
+  /* Lists */
+  ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+  li { margin-bottom: 0.4rem; }
+
+  /* Tags */
+  .tag { display: inline-block; background: #e8f4fd; color: #0066cc; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 500; margin-right: 0.3rem; }
+  .tag.green { background: #e8f5e9; color: #2e7d32; }
+  .tag.orange { background: #fff3e0; color: #e65100; }
+  .tag.red { background: #fce4ec; color: #c62828; }
+
+  /* Footer */
+  .footer { text-align: center; padding: 2rem 0; color: #888; font-size: 0.9rem; border-top: 1px solid #eee; margin-top: 2rem; }
+  .footer a { color: #0066cc; }
+
+  @media (max-width: 600px) {
+    .hero h1 { font-size: 1.8rem; }
+    .hero .stats { gap: 1rem; }
+    .img-grid { grid-template-columns: 1fr; }
+    section { padding: 1.5rem; }
+  }
 </style>
 </head>
 <body>
 <div class="container">
 
-<h1>SEC-EDGAR-GPT</h1>
-<p class="subtitle">A 124M parameter GPT-2 trained on SEC-EDGAR financial filings</p>
-
-<div class="links">
-  <a href="https://github.com/lzwjava/sec-edgar-gpt">GitHub</a>
-  <a href="https://huggingface.co/lzwjava/sec-edgar-gpt-124m-hf">HuggingFace</a>
-  <a href="https://github.com/lzwjava/sec-edgar-gpt/raw/main/sec-edgar-gpt.pdf">Paper (PDF)</a>
+<!-- Hero -->
+<div class="hero">
+  <h1>SEC-EDGAR-GPT</h1>
+  <p class="subtitle">A 124M parameter GPT-2 trained on SEC-EDGAR financial filings</p>
+  <div class="links">
+    <a href="https://github.com/lzwjava/sec-edgar-gpt">GitHub</a>
+    <a href="https://huggingface.co/lzwjava/sec-edgar-gpt-124m-hf">HuggingFace</a>
+    <a href="https://github.com/lzwjava/sec-edgar-gpt/raw/main/sec-edgar-gpt.pdf">Paper (PDF)</a>
+    <a href="https://sec-edgar-gpt.lzwjava.workers.dev">Live Demo</a>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="num">124M</div><div class="label">Parameters</div></div>
+    <div class="stat"><div class="num">1.55B</div><div class="label">Training Tokens</div></div>
+    <div class="stat"><div class="num">2.28</div><div class="label">Val Loss</div></div>
+    <div class="stat"><div class="num">~8h</div><div class="label">Training Time</div></div>
+  </div>
 </div>
 
-<h2>Overview</h2>
-<p>A 124M parameter GPT-2 language model trained on 1.55 billion tokens of SEC-EDGAR corporate filings using the nanoGPT framework. Trained on a single NVIDIA RTX 4070 GPU in approximately 8 hours, reaching a final validation loss of 2.28.</p>
+<!-- Overview -->
+<section>
+  <h2>Overview</h2>
+  <p>
+    SEC-EDGAR-GPT is a 124-million parameter GPT-2 language model trained on 1.55 billion tokens of SEC-EDGAR corporate filings using the nanoGPT framework. The model was trained on a single NVIDIA RTX 4070 GPU over approximately 8 hours, reaching a final validation loss of 2.28.
+  </p>
+  <p>
+    We evaluated the model's generation quality across multiple SEC filing sections including business descriptions, management discussion and analysis, risk factors, financial notes, and proxy statements. The model successfully learns SEC document structure, financial vocabulary, and boilerplate language patterns, but exhibits characteristic limitations in long-range coherence, numerical consistency, and table extension.
+  </p>
+</section>
 
-<h2>Key Numbers</h2>
-<table>
-  <tr><td class="key">Parameters</td><td>124M</td></tr>
-  <tr><td class="key">Training tokens</td><td>1.55B</td></tr>
-  <tr><td class="key">Validation loss</td><td>2.28</td></tr>
-  <tr><td class="key">Training steps</td><td>47,000</td></tr>
-  <tr><td class="key">Training time</td><td>~8 hours</td></tr>
-  <tr><td class="key">Hardware</td><td>NVIDIA RTX 4070 (12GB)</td></tr>
-  <tr><td class="key">Framework</td><td>nanoGPT</td></tr>
-</table>
+<!-- Training Setup -->
+<section>
+  <h2>Training Setup</h2>
+  <div class="figure">
+    <img src="images/paper4.jpg" alt="Training workstation with RTX 4070">
+    <div class="caption">Training workstation equipped with NVIDIA RTX 4070 GPU (12GB VRAM)</div>
+  </div>
 
-<h2>Findings</h2>
-<ul>
-  <li>Model learns SEC document structure, financial vocabulary, and boilerplate language</li>
-  <li>Excels at echoing input content (tables, numbers, formatting)</li>
-  <li>Struggles with numerical consistency and long-range coherence</li>
-  <li>Exhibits loop attractors on high-probability SEC phrases</li>
-  <li>Can draft placeholder text resembling authentic filings</li>
-</ul>
+  <h3>Model Architecture</h3>
+  <table>
+    <tr><th>Parameter</th><th>Value</th></tr>
+    <tr><td class="key">Number of layers</td><td>12</td></tr>
+    <tr><td class="key">Attention heads</td><td>12</td></tr>
+    <tr><td class="key">Embedding dimension</td><td>768</td></tr>
+    <tr><td class="key">Context length</td><td>1,024 tokens</td></tr>
+    <tr><td class="key">Total parameters</td><td>123.59M</td></tr>
+    <tr><td class="key">Vocabulary</td><td>GPT-2 BPE (50,257 tokens)</td></tr>
+  </table>
 
-<h2>Citation</h2>
-<pre style="background:#f5f5f5; padding:1rem; border-radius:6px; overflow-x:auto; font-size:0.9rem;">
-@article{li2026secedgargpt,
-  title={SEC-EDGAR-GPT: A 124M Financial Language Model},
-  author={Li, Zhiwei},
-  year={2026}
-}
-</pre>
+  <h3>Training Data</h3>
+  <table>
+    <tr><th>Metric</th><th>Value</th></tr>
+    <tr><td class="key">Total training tokens</td><td>1.55B</td></tr>
+    <tr><td class="key">Training shards</td><td>16</td></tr>
+    <tr><td class="key">Validation tokens</td><td>100M</td></tr>
+    <tr><td class="key">Source</td><td>SEC-EDGAR via CodeParrot dataset</td></tr>
+    <tr><td class="key">Tokenizer</td><td>GPT-2 BPE</td></tr>
+  </table>
 
+  <h3>Hyperparameters</h3>
+  <table>
+    <tr><th>Parameter</th><th>Value</th></tr>
+    <tr><td class="key">Effective batch size</td><td>32,768 tokens</td></tr>
+    <tr><td class="key">Learning rate</td><td>6e-4</td></tr>
+    <tr><td class="key">Min learning rate</td><td>6e-5</td></tr>
+    <tr><td class="key">Warmup iterations</td><td>2,000</td></tr>
+    <tr><td class="key">Max iterations</td><td>47,000</td></tr>
+    <tr><td class="key">Optimizer</td><td>AdamW (β₁=0.9, β₂=0.95)</td></tr>
+    <tr><td class="key">Weight decay</td><td>0.1</td></tr>
+    <tr><td class="key">Gradient clipping</td><td>1.0</td></tr>
+  </table>
+</section>
+
+<!-- Training Results -->
+<section>
+  <h2>Training Results</h2>
+  <div class="figure">
+    <img src="images/paper2.png" alt="Training loss curve">
+    <div class="caption">Training and validation loss over 47,000 steps. The model converged from 10.98 to 2.28 validation loss, with a notable spike at step 20,000 (reaching 8.04) before recovering.</div>
+  </div>
+
+  <h3>Loss Progression</h3>
+  <table>
+    <tr><th>Step</th><th>Train Loss</th><th>Val Loss</th></tr>
+    <tr><td>0</td><td>10.98</td><td>—</td></tr>
+    <tr><td>1,000</td><td>3.82</td><td>3.75</td></tr>
+    <tr><td>5,000</td><td>2.95</td><td>2.91</td></tr>
+    <tr><td>10,000</td><td>2.62</td><td>2.58</td></tr>
+    <tr><td>20,000</td><td>2.38</td><td>2.35</td></tr>
+    <tr><td>30,000</td><td>2.25</td><td>2.23</td></tr>
+    <tr><td>40,000</td><td>2.15</td><td>2.22</td></tr>
+    <tr><td>47,000</td><td>2.10</td><td>2.28</td></tr>
+  </table>
+
+  <h3>Cross-Domain Comparison</h3>
+  <table>
+    <tr><th>Dataset</th><th>Val Loss</th><th>Notes</th></tr>
+    <tr><td>OpenWebText (GPT-2 baseline)</td><td>2.85</td><td>General web text</td></tr>
+    <tr><td>GitHub Code</td><td>3.466</td><td>Noisy code data</td></tr>
+    <tr><td><strong>SEC-EDGAR (this work)</strong></td><td><strong>2.28</strong></td><td><strong>Clean financial prose</strong></td></tr>
+  </table>
+  <p>The SEC-EDGAR model achieves significantly lower validation loss than both the general text and code models, likely due to the structured, repetitive nature of SEC filings with highly formulaic language.</p>
+
+  <h3>Training Completion</h3>
+  <div class="figure">
+    <img src="images/paper3.png" alt="Training completion screenshot">
+    <div class="caption">Training completion: iteration 47,000 reached on the RTX 4070 workstation, accessed remotely from macOS.</div>
+  </div>
+</section>
+
+<!-- Generation Samples -->
+<section>
+  <h2>Generation Quality Analysis</h2>
+  <p>We evaluated the model using five prompts representing different SEC filing sections. Each prompt contained 500–2,000 characters of authentic SEC text, generating 1,000 tokens at temperature 0.7 with top-k=100. Evaluation prompts were generated with the assistance of Hermes Agent (Nous Research).</p>
+
+  <h3>Prompt 1: HSBC Business Description</h3>
+  <div class="sample">
+    <div class="prompt">Input: HSBC Holdings plc — $2.92T assets, 42M customers, 62 countries, CET1 ratio 14.8%</div>
+    <div class="generated">On September 10, 2023, we completed the initial public
+offering of 2,000,000 shares of our common stock at a
+price of $8.50 per share, resulting in net proceeds of
+approximately $12.4 million.
+
+Our net revenue for the year ended December 31, 2023
+was $2.5 billion, and revenue of $3.6 billion,
+respectively, on our Cash Balance Sheet.
+
+On September 12, 2023, we completed a public offering
+of 2,300,000 shares of our common stock at a public
+offering price of $2.05 per share.
+
+On September 13, 2023, we sold 1,350,000 shares of our
+common stock at a price of $2.05 per share, resulting
+in net proceeds of approximately $8.5 million.</div>
+    <div class="note">
+      <span class="tag green">Structure</span> Maintains SEC filing format<br>
+      <span class="tag orange">Loop</span> Enters "public offering" loop after 2 paragraphs<br>
+      <span class="tag red">Scale</span> HSBC is a trillion-dollar bank but generated offerings are $2–12M
+    </div>
+  </div>
+
+  <h3>Prompt 2: DBS Group MD&A</h3>
+  <div class="sample">
+    <div class="prompt">Input: DBS Group — SGD 16.5B total income (+22%), NIM 2.12%, cost-income ratio 41.2%</div>
+    <div class="generated">Total operating expenses were flat in the prior year
+due to a significant decline in sales and general and
+administrative expenses.
+
+Non-interest expenses increased $7.8 million, or 12.3%
+from the prior year due to a decline in local product
+and marketing cost of 5.8% in the prior year.
+
+Net interest income was 41.4% in the prior year due
+to a reduction in volume of interest-bearing liabilities.</div>
+    <div class="note">
+      <span class="tag green">Terminology</span> Correct financial vocabulary (NIM, cost-income ratio)<br>
+      <span class="tag red">Currency</span> Switches from SGD to USD<br>
+      <span class="tag red">Logic</span> "Expenses were flat" then "increased $7.8 million"
+    </div>
+  </div>
+
+  <h3>Prompt 3: MD&A Revenue Analysis</h3>
+  <div class="sample">
+    <div class="prompt">Input: Revenue growth 28%, cost analysis, gross margin 62.7% → 64.4%</div>
+    <div class="generated">Cost of revenue increased by $32.1 million, or 26%, for
+the year ended December 31, 2023, compared to $162.2
+million for the prior year. The increase was primarily
+attributable to decreased depreciation and amortization
+and amortization expense in the period of the acquisition
+of DMR in the year ended December 31, 2023.
+
+Cost of revenue increased by $40.0 million, or 2%, to
+$107.1 million for the year ended December 31, 2023,
+from $162.8 million for the year ended December 31, 2022.</div>
+    <div class="note">
+      <span class="tag green">Template</span> Excellent first paragraph — references acquisition (DMR)<br>
+      <span class="tag orange">Loop</span> 10 consecutive "Cost of revenue increased/decreased" paragraphs<br>
+      <span class="tag red">Math</span> Percentages don't match dollar amounts cited
+    </div>
+  </div>
+
+  <h3>Prompt 4: Financial Notes (Revenue Recognition)</h3>
+  <div class="sample">
+    <div class="prompt">Input: Revenue table — subscription ($380M), professional services ($89M), hardware ($18M)</div>
+    <div class="generated">[Input table echoed with perfect formatting and alignment]
+
+The aggregate amount of the transaction price allocated
+to remaining performance obligations was $892.3 million,
+of which we expect to recognize approximately 65% as
+revenue during the next 12 months and the remainder
+thereafter.
+
+The table below presents our revenues in the periods
+indicated (in thousands):
+Year Ended December 31,
+
+[blank spaces — model unable to generate table rows]</div>
+    <div class="note">
+      <span class="tag green">Echo</span> Table perfectly reproduced with exact numbers<br>
+      <span class="tag red">Extend</span> Cannot generate new table rows — collapses to blanks
+    </div>
+  </div>
+
+  <h3>Prompt 5: Proxy Statement (Executive Compensation)</h3>
+  <div class="sample">
+    <div class="prompt">Input: Executive comp table — CEO $5.48M, CFO $3.59M, CTO $2.97M</div>
+    <div class="generated">[Input table echoed with correct column alignment
+and all three executive rows]
+
+William R. Gras    100,000  $
+
+[blank spaces — model unable to complete the row]</div>
+    <div class="note">
+      <span class="tag green">Structure</span> Table structure perfectly preserved<br>
+      <span class="tag orange">Hallucinate</span> Attempted to add 4th executive "William R. Gras"<br>
+      <span class="tag red">Collapse</span> Immediately collapses after incomplete row
+    </div>
+  </div>
+</section>
+
+<!-- Key Findings -->
+<section>
+  <h2>Key Findings</h2>
+
+  <h3>Echo vs. Generate</h3>
+  <p>The model excels at <strong>echoing</strong> input content (tables, numbers, formatting) but struggles to <strong>generate</strong> new content that maintains consistency. It learned surface-level patterns rather than underlying data relationships.</p>
+
+  <h3>Loop Attractors</h3>
+  <p>Certain phrases act as "probability sinks" when the model is uncertain:</p>
+  <ul>
+    <li><code>"Commercialization of product candidates"</code> — biotech 10-K risk factors</li>
+    <li><code>"Cost of revenue increased by $X million"</code> — standard MD&A opener</li>
+    <li><code>"Raise additional capital"</code> — going-concern disclosures</li>
+  </ul>
+
+  <h3>Numerical Coherence</h3>
+  <ul>
+    <li><strong>Dollar amounts:</strong> Plausible scale ($1M–$500M) but internally inconsistent</li>
+    <li><strong>Percentages:</strong> Often don't match the dollar changes cited</li>
+    <li><strong>Dates:</strong> Consistent (always "December 31, 2023/2022")</li>
+    <li><strong>Implication:</strong> The model learned the <em>format</em> of numbers, not their <em>meaning</em></li>
+  </ul>
+
+  <h3>What It Can Do</h3>
+  <ul>
+    <li>Generate SEC boilerplate language and standard disclosures</li>
+    <li>Suggest section structures and formatting conventions</li>
+    <li>Draft placeholder text that visually resembles authentic filings</li>
+    <li>Provide a starting point for human writers to edit and refine</li>
+  </ul>
+
+  <h3>What It Cannot Do</h3>
+  <ul>
+    <li>Generate accurate financial data or calculations</li>
+    <li>Maintain consistency across long documents</li>
+    <li>Produce factually grounded content</li>
+    <li>Extend tables with new, coherent rows</li>
+  </ul>
+</section>
+
+<!-- Citation -->
+<section>
+  <h2>Citation</h2>
+  <pre>@article{li2026secedgargpt,
+  title   = {SEC-EDGAR-GPT: A 124M Financial Language Model},
+  author  = {Li, Zhiwei},
+  year    = {2026},
+  url     = {https://github.com/lzwjava/sec-edgar-gpt}
+}</pre>
+</section>
+
+<!-- Footer -->
 <div class="footer">
   <p>Zhiwei Li &middot; <a href="mailto:lzwjava@gmail.com">lzwjava@gmail.com</a> &middot; June 2026</p>
+  <p>Built with <a href="https://github.com/karpathy/nanoGPT">nanoGPT</a> &middot; Trained on RTX 4070</p>
 </div>
 
 </div>
