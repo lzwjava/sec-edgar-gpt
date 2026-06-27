@@ -32,7 +32,7 @@ const HTML = `<!DOCTYPE html>
 <p class="subtitle">A 124M parameter GPT-2 trained on SEC-EDGAR financial filings</p>
 <div class="links">
   <a href="https://github.com/lzwjava/sec-edgar-gpt">GitHub</a>
-  <a href="https://huggingface.co/lzwjava/sec-edgar-gpt-124m-hf">Model (HuggingFace)</a>
+  <a href="https://huggingface.co/lzwjava/sec-edgar-gpt-124m-hf">HuggingFace</a>
   <a href="https://github.com/lzwjava/sec-edgar-gpt/raw/main/sec-edgar-gpt.pdf">Paper (PDF)</a>
 </div>
 <h2>Overview</h2>
