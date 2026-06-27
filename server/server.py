@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """OpenAI-compatible API server for GPT-2 using transformers + FastAPI."""
 import torch, json, time, uuid, os
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse
 from pydantic import BaseModel
 from typing import List, Optional
@@ -12,9 +12,32 @@ app = FastAPI()
 
 print("Loading model...")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR)
-model = AutoModelForCausalLM.from_pretrained(MODEL_DIR, torch_dtype=torch.float32).to("cuda")
+model = AutoModelForCausalLM.from_pretrained(MODEL_DIR, dtype=torch.float32).to("cuda")
 model.eval()
+EOS_ID = tokenizer.eos_token_id
 print(f"Model loaded on GPU. Vocab: {tokenizer.vocab_size}, Model vocab: {model.config.vocab_size}")
+
+SEC_SYSTEM = (
+    "The following are excerpts from SEC EDGAR filings filed with the "
+    "U.S. Securities and Exchange Commission by publicly traded companies.\n\n"
+)
+
+MIN_PROMPT_CHARS = 10
+
+def _generate(input_ids, max_new_tokens, temperature, top_p):
+    """Shared generate wrapper with proper attention_mask and pad_token_id."""
+    attention_mask = torch.ones_like(input_ids)
+    with torch.no_grad():
+        output = model.generate(
+            input_ids,
+            attention_mask=attention_mask,
+            max_new_tokens=max_new_tokens,
+            temperature=max((temperature or 0.7), 1e-7),
+            top_p=top_p or 0.9,
+            do_sample=True,
+            pad_token_id=EOS_ID,
+        )
+    return output
 
 class CompletionRequest(BaseModel):
     model: str = "sec-edgar-gpt-124m"
@@ -43,19 +66,14 @@ async def index():
 
 @app.post("/v1/completions")
 async def completions(req: CompletionRequest):
-    input_ids = tokenizer.encode(req.prompt, return_tensors="pt").to("cuda")
+    if len(req.prompt.strip()) < MIN_PROMPT_CHARS:
+        raise HTTPException(400, f"Prompt must be at least {MIN_PROMPT_CHARS} characters")
+    prompt = SEC_SYSTEM + req.prompt
+    input_ids = tokenizer.encode(prompt, return_tensors="pt").to("cuda")
     t0 = time.time()
-    with torch.no_grad():
-        output = model.generate(
-            input_ids,
-            max_new_tokens=req.max_tokens,
-            temperature=req.temperature,
-            top_p=req.top_p,
-            do_sample=True,
-        )
+    output = _generate(input_ids, req.max_tokens, req.temperature, req.top_p)
     gen_ids = output[0][input_ids.shape[1]:]
     text = tokenizer.decode(gen_ids, skip_special_tokens=True)
-    elapsed = time.time() - t0
     return {
         "id": f"cmpl-{uuid.uuid4().hex[:8]}",
         "object": "text_completion",
@@ -71,26 +89,25 @@ async def completions(req: CompletionRequest):
 
 @app.post("/v1/chat/completions")
 async def chat_completions(req: ChatRequest):
-    # Simple: concatenate messages as prompt
-    prompt = "\n".join(f"{m.role}: {m.content}" for m in req.messages) + "\nassistant: "
+    # Build prompt: prepend SEC system context, then messages
+    user_text = "\n".join(f"{m.role}: {m.content}" for m in req.messages)
+    if len(user_text.strip()) < MIN_PROMPT_CHARS:
+        raise HTTPException(400, f"Message must be at least {MIN_PROMPT_CHARS} characters")
+    prompt = SEC_SYSTEM + user_text + "\nassistant: "
     input_ids = tokenizer.encode(prompt, return_tensors="pt").to("cuda")
     t0 = time.time()
-    with torch.no_grad():
-        output = model.generate(
-            input_ids,
-            max_new_tokens=req.max_tokens,
-            temperature=req.temperature,
-            top_p=req.top_p,
-            do_sample=True,
-        )
+    output = _generate(input_ids, req.max_tokens, req.temperature, req.top_p)
     gen_ids = output[0][input_ids.shape[1]:]
     text = tokenizer.decode(gen_ids, skip_special_tokens=True)
+    # Trim at first newline after a reasonable length to avoid run-on
+    if "\n" in text[20:]:
+        text = text[:text.index("\n", 20)]
     return {
         "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
         "object": "chat.completion",
         "created": int(time.time()),
         "model": req.model,
-        "choices": [{"message": {"role": "assistant", "content": text}, "index": 0, "finish_reason": "stop"}],
+        "choices": [{"message": {"role": "assistant", "content": text.strip()}, "index": 0, "finish_reason": "stop"}],
         "usage": {
             "prompt_tokens": input_ids.shape[1],
             "completion_tokens": len(gen_ids),

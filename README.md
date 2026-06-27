@@ -20,7 +20,7 @@ A GPT-2 (124M) language model trained from scratch on SEC EDGAR filings (10-K, 1
 
 ## Training Data
 
-SEC EDGAR filings sourced from the [SEC-EDGAR corpus on HuggingFace](https://huggingface.co/datasets/eltorio/SEC-EDGAR-Corpus), covering annual reports (10-K), quarterly reports (10-Q), current reports (8-K), and other filing types. Tokenized with GPT-2 BPE into ~1.55B tokens across 16 shards.
+SEC EDGAR filings sourced from the [SEC-EDGAR corpus on HuggingFace](https://huggingface.co/datasets/kapilrao/SEC-EDGAR), covering annual reports (10-K), quarterly reports (10-Q), current reports (8-K), and other filing types. Tokenized with GPT-2 BPE into ~1.55B tokens across 16 shards.
 
 ## Training Config
 
