@@ -21,12 +21,20 @@
   .input-area button:hover { background: #c73652; }
   .input-area button:disabled { background: #555; cursor: not-allowed; }
   .typing { align-self: flex-start; color: #888; font-size: 13px; }
+  .samples { display: flex; flex-direction: column; gap: 6px; align-self: flex-start; max-width: 80%; }
+  .sample { padding: 8px 12px; background: #0f3460; border: 1px solid #1a4a8a; border-radius: 8px; font-size: 13px; cursor: pointer; transition: background 0.15s; }
+  .sample:hover { background: #1a4a8a; border-color: #e94560; }
 </style>
 </head>
 <body>
 <div class="header">SEC EDGAR <span>GPT-124M</span> Chat</div>
 <div class="messages" id="messages">
   <div class="msg system">Ask about SEC filings, financial disclosures, or business descriptions. This 124M model was trained on SEC EDGAR data — keep questions financial/legal. Min 10 chars.</div>
+  <div class="samples" id="samples">
+    <div class="sample" onclick="useSample(this)">What risk factors did Apple disclose in their most recent 10-K filing?</div>
+    <div class="sample" onclick="useSample(this)">Describe the revenue segments and business operations reported by Microsoft.</div>
+    <div class="sample" onclick="useSample(this)">What legal proceedings and litigation matters are mentioned in Amazon's SEC filing?</div>
+  </div>
 </div>
 <div class="input-area">
   <textarea id="input" placeholder="e.g. What risks did Apple disclose in their 10-K filing?" rows="1"></textarea>
@@ -82,6 +90,12 @@ async function send() {
   }
   sendBtn.disabled = false;
   input.focus();
+}
+
+function useSample(el) {
+  input.value = el.textContent;
+  input.focus();
+  document.getElementById('samples').style.display = 'none';
 }
 
 // auto-resize textarea
