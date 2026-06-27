@@ -1,4 +1,5 @@
 *.safetensors
+.wrangler/
 
 # LaTeX intermediate files
 *.aux
