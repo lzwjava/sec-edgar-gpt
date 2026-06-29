@@ -27,7 +27,7 @@
   numberstyle=\tiny\color{gray}
 }
 
-\title{SEC-EDGAR-GPT: A 124M Financial Language Model%
+\title{SEC-EDGAR-GPT: A GPT-2 (124M) Language Model Trained from Scratch on SEC EDGAR Filings%
 \thanks{Code: \url{https://github.com/lzwjava/sec-edgar-gpt} \quad
 Model: \url{https://huggingface.co/lzwjava/sec-edgar-gpt-124m-hf}}}
 \author{
@@ -520,7 +520,42 @@ Potential improvements include:
     \item \textbf{Longer context:} Extending beyond 1,024 tokens to capture full document sections
 \end{enumerate}
 
-\section{Conclusion}
+\section{Model Serving}
+
+We serve the trained model through an OpenAI-compatible API server. A key design decision was whether to load the checkpoint using the native nanoGPT \texttt{model.py} or to convert weights to Hugging Face format and serve via \texttt{transformers.GPT2LMHeadModel}. We chose native serving and argue this is the correct choice for a self-trained nanoGPT model.
+
+\subsection{The \texttt{bias=False} Conversion Problem}
+
+nanoGPT's architecture makes bias optional everywhere via a configuration flag:
+
+\begin{Verbatim}[fontsize=\small]
+class LayerNorm(nn.Module):
+    def __init__(self, ndim, bias):
+        self.weight = nn.Parameter(torch.ones(ndim))
+        self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
+
+    def forward(self, input):
+        return F.layer_norm(input, self.weight.shape,
+                            self.weight, self.bias, 1e-5)
+\end{Verbatim}
+
+We trained with \texttt{bias=False}, so our checkpoint contains \textbf{no} LayerNorm bias parameters and \textbf{no} Linear bias parameters. Hugging Face's \texttt{GPT2LMHeadModel} has no such switch---GPT-2's architecture always includes biases (LayerNorm $\beta$, attention and MLP \texttt{c\_proj} bias terms). Converting nanoGPT to HF format requires fabricating zero-filled bias tensors to fill slots the training never used.
+
+While mathematically a zero bias is a no-op ($xW + 0 = xW$), the real risk lies in the conversion mapping itself. nanoGPT stores attention as a single fused \texttt{c\_attn} weight ($3072 \times 1024$ for Q, K, V) while HF expects separate \texttt{Conv1D} projections with transposed weight layouts. Any off-by-transpose error or incorrect weight tying in the converter silently degrades output without crashing---producing elevated loss or gibberish that is difficult to diagnose. Serving native eliminates the entire conversion surface.
+
+\subsection{Sampling Parity}
+
+nanoGPT's \texttt{generate()} function is approximately 10 lines with transparent semantics: it applies temperature scaling, optional top-k filtering, and multinomial sampling. Hugging Face's \texttt{model.generate()} is a dispatcher with its own \texttt{top\_k}, \texttt{temperature}, \texttt{do\_sample}, and \texttt{pad\_token} semantics spanning thousands of lines. Matching nanoGPT's evaluation-time behavior through the HF API requires reverse-engineering which parameters map to what. Native serving uses the identical code path used during training and evaluation, guaranteeing sampling parity.
+
+\subsection{Dependency Overhead}
+
+Native serving requires only \texttt{torch} and \texttt{tiktoken}, eliminating the \texttt{transformers} dependency and its transitive requirements (\texttt{safetensors}, \texttt{tokenizers}, \texttt{huggingface\_hub}). This reduces cold start time and simplifies deployment on constrained environments such as cloud GPU instances.
+
+\subsection{When Hugging Face or vLLM Would Be Preferred}
+
+For completeness, HF \texttt{transformers} (or better, vLLM) would be the right choice when: (a) batched, high-throughput serving with continuous batching and paged KV cache is required---nanoGPT's \texttt{generate()} is single-sequence with no KV cache, recomputing the full prefix every token at $O(T^2)$ cost; (b) the ecosystem features are needed---streaming, beam search, logit processors, quantization (bitsandbytes/GPTQ), or \texttt{device\_map} sharding; or (c) the model is being handed to external users who expect a standard \texttt{from\_pretrained} interface. For a 124M demonstration model, none of these apply.
+
+\\section{Conclusion}
 
 We have demonstrated that a 124M parameter GPT-2 model can learn SEC-EDGAR document structure, financial vocabulary, and boilerplate language when trained on 1.55 billion tokens of corporate filings. The model achieves convincing surface-level generation quality but exhibits fundamental limitations in numerical consistency, long-range coherence, and table extension.
 
