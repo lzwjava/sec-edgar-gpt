@@ -1,193 +1,141 @@
 #!/usr/bin/env python3
-"""OpenAI-compatible API server for GPT-2 using transformers + FastAPI."""
-import torch, json, time, uuid, os
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse
-from pydantic import BaseModel
-from typing import List, Optional
-from transformers import AutoModelForCausalLM, AutoTokenizer
+"""OpenAI-compatible API server using native nanoGPT model (no transformers)."""
+import os
+import sys
+import torch
+import time
+import uuid
 
-MODEL_DIR = "/workspace/model/hf-model"
+# Add model directory to path so we can import model.py
+sys.path.insert(0, os.path.dirname(__file__))
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+from typing import List
+from model import GPTConfig, GPT
+
+MODEL_DIR = os.path.dirname(__file__)
+CKPT_PATH = os.path.join(MODEL_DIR, "ckpt.pt")
 app = FastAPI()
 
-print("Loading model...")
-tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR)
-model = AutoModelForCausalLM.from_pretrained(MODEL_DIR, dtype=torch.float32).to("cuda")
+print("Loading nanoGPT checkpoint...")
+checkpoint = torch.load(CKPT_PATH, map_location="cuda", weights_only=False)
+gptconf = GPTConfig(**checkpoint["model_args"])
+model = GPT(gptconf)
+state_dict = checkpoint["model"]
+# Remove compiled model prefix if present
+unwanted_prefix = "_orig_mod."
+for k, v in list(state_dict.items()):
+    if k.startswith(unwanted_prefix):
+        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+model.load_state_dict(state_dict)
 model.eval()
-EOS_ID = tokenizer.eos_token_id
-print(f"Model loaded on GPU. Vocab: {tokenizer.vocab_size}, Model vocab: {model.config.vocab_size}")
+model.to("cuda")
 
-SEC_SYSTEM = (
-    "The following are excerpts from SEC EDGAR filings filed with the "
-    "U.S. Securities and Exchange Commission by publicly traded companies.\n\n"
-)
+# Use tiktoken (GPT-2 BPE) — same as nanoGPT sample.py
+import tiktoken
+enc = tiktoken.get_encoding("gpt2")
+EOS_ID = enc.eot_token  # 50256
+
+print(f"Model loaded on GPU. Vocab: {gptconf.vocab_size}, params: {model.get_num_params()/1e6:.1f}M")
 
 MIN_PROMPT_CHARS = 10
-
-class RepetitionPenaltyLogitsWarper:
-    """Applies frequency_penalty and presence_penalty like OpenAI."""
-    def __init__(self, frequency_penalty: float, presence_penalty: float):
-        self.frequency_penalty = frequency_penalty
-        self.presence_penalty = presence_penalty
-
-    def __call__(self, input_ids: torch.Tensor, scores: torch.Tensor) -> torch.Tensor:
-        if self.frequency_penalty == 0.0 and self.presence_penalty == 0.0:
-            return scores
-        for i in range(input_ids.shape[0]):
-            token_counts = torch.bincount(input_ids[i], minlength=scores.shape[-1]).float()
-            # presence_penalty: -1 if token appeared at all
-            # frequency_penalty: -count * penalty
-            penalty = token_counts * self.frequency_penalty
-            penalty += (token_counts > 0).float() * self.presence_penalty
-            scores[i] -= penalty
-        return scores
+BLOCK_SIZE = gptconf.block_size  # 1024
 
 
-def _generate(input_ids, max_new_tokens, temperature, top_p,
-              frequency_penalty=0.0, presence_penalty=0.0, stop=None, seed=None,
-              n=1):
-    """Shared generate wrapper with proper attention_mask and pad_token_id."""
-    if seed is not None:
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed(seed)
-    attention_mask = torch.ones_like(input_ids)
-    # Build logits processor list
-    logits_processors = []
-    if frequency_penalty != 0.0 or presence_penalty != 0.0:
-        logits_processors.append(
-            RepetitionPenaltyLogitsWarper(frequency_penalty, presence_penalty)
-        )
-    with torch.no_grad():
-        output = model.generate(
-            input_ids,
-            attention_mask=attention_mask,
-            max_new_tokens=max_new_tokens,
-            temperature=max((temperature or 0.7), 1e-7),
-            top_p=top_p or 0.9,
-            do_sample=True,
-            pad_token_id=EOS_ID,
-            num_return_sequences=n,
-            logits_processor=logits_processors or None,
-        )
-    # Post-process: truncate at first stop sequence
-    results = []
-    prompt_len = input_ids.shape[1]
-    for seq in output:
-        gen_ids = seq[prompt_len:]
-        text = tokenizer.decode(gen_ids, skip_special_tokens=True)
-        if stop:
-            for s in stop:
-                idx = text.find(s)
-                if idx != -1:
-                    text = text[:idx]
-        results.append((gen_ids, text))
-    return results
+def _generate(input_ids, max_new_tokens, temperature, top_k):
+    """Generate using native nanoGPT generate()."""
+    return model.generate(input_ids, max_new_tokens, temperature=temperature, top_k=top_k)
+
 
 class CompletionRequest(BaseModel):
     model: str = "sec-edgar-gpt-124m"
     prompt: str
-    max_tokens: int = 100
-    temperature: float = 0.7
-    top_p: float = 0.9
-    n: int = 1
-    stop: Optional[List[str]] = None
-    frequency_penalty: float = 0.0
-    presence_penalty: float = 0.0
-    seed: Optional[int] = None
+    max_tokens: int = 1000
+    temperature: float = 0.8
+    top_k: int = 200
     stream: bool = False
+
 
 class ChatMessage(BaseModel):
     role: str
     content: str
 
+
 class ChatRequest(BaseModel):
     model: str = "sec-edgar-gpt-124m"
     messages: List[ChatMessage]
-    max_tokens: int = 100
-    temperature: float = 0.7
-    top_p: float = 0.9
-    n: int = 1
-    stop: Optional[List[str]] = None
-    frequency_penalty: float = 0.0
-    presence_penalty: float = 0.0
-    seed: Optional[int] = None
+    max_tokens: int = 1000
+    temperature: float = 0.8
+    top_k: int = 200
     stream: bool = False
+
 
 @app.get("/")
 async def index():
-    html_path = os.path.join(os.path.dirname(__file__), "index.html")
+    html_path = os.path.join(MODEL_DIR, "index.html")
     return FileResponse(html_path, media_type="text/html")
+
 
 @app.post("/v1/completions")
 async def completions(req: CompletionRequest):
     if len(req.prompt.strip()) < MIN_PROMPT_CHARS:
         raise HTTPException(400, f"Prompt must be at least {MIN_PROMPT_CHARS} characters")
-    prompt = SEC_SYSTEM + req.prompt
-    input_ids = tokenizer.encode(prompt, return_tensors="pt").to("cuda")
-    results = _generate(
-        input_ids, req.max_tokens, req.temperature, req.top_p,
-        frequency_penalty=req.frequency_penalty, presence_penalty=req.presence_penalty,
-        stop=req.stop, seed=req.seed, n=req.n,
-    )
-    choices = []
-    for i, (gen_ids, text) in enumerate(results):
-        choices.append({"text": text, "index": i, "finish_reason": "stop"})
+    start_ids = enc.encode(req.prompt, allowed_special={"<|endoftext|>"})
+    x = torch.tensor(start_ids, dtype=torch.long, device="cuda")[None, ...]
+    t0 = time.time()
+    y = _generate(x, req.max_tokens, req.temperature, req.top_k)
+    gen_ids = y[0][len(start_ids):]
+    text = enc.decode(gen_ids.tolist())
     return {
         "id": f"cmpl-{uuid.uuid4().hex[:8]}",
         "object": "text_completion",
         "created": int(time.time()),
         "model": req.model,
-        "choices": choices,
+        "choices": [{"text": text, "index": 0, "finish_reason": "stop"}],
         "usage": {
-            "prompt_tokens": input_ids.shape[1],
-            "completion_tokens": sum(len(gi) for gi, _ in results),
-            "total_tokens": input_ids.shape[1] + sum(len(gi) for gi, _ in results),
+            "prompt_tokens": len(start_ids),
+            "completion_tokens": len(gen_ids),
+            "total_tokens": len(start_ids) + len(gen_ids),
         },
     }
 
+
 @app.post("/v1/chat/completions")
 async def chat_completions(req: ChatRequest):
-    # Build prompt: prepend SEC system context, then messages
     user_text = "\n".join(f"{m.role}: {m.content}" for m in req.messages)
     if len(user_text.strip()) < MIN_PROMPT_CHARS:
         raise HTTPException(400, f"Message must be at least {MIN_PROMPT_CHARS} characters")
-    prompt = SEC_SYSTEM + user_text + "\nassistant: "
-    input_ids = tokenizer.encode(prompt, return_tensors="pt").to("cuda")
-    results = _generate(
-        input_ids, req.max_tokens, req.temperature, req.top_p,
-        frequency_penalty=req.frequency_penalty, presence_penalty=req.presence_penalty,
-        stop=req.stop, seed=req.seed, n=req.n,
-    )
-    choices = []
-    for i, (gen_ids, text) in enumerate(results):
-        # Trim at first newline after a reasonable length to avoid run-on
-        if "\n" in text[20:]:
-            text = text[:text.index("\n", 20)]
-        choices.append({
-            "message": {"role": "assistant", "content": text.strip()},
-            "index": i,
-            "finish_reason": "stop",
-        })
+    start_ids = enc.encode(user_text, allowed_special={"<|endoftext|>"})
+    x = torch.tensor(start_ids, dtype=torch.long, device="cuda")[None, ...]
+    t0 = time.time()
+    y = _generate(x, req.max_tokens, req.temperature, req.top_k)
+    gen_ids = y[0][len(start_ids):]
+    text = enc.decode(gen_ids.tolist())
     return {
         "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
         "object": "chat.completion",
         "created": int(time.time()),
         "model": req.model,
-        "choices": choices,
+        "choices": [{"message": {"role": "assistant", "content": text.strip()}, "index": 0, "finish_reason": "stop"}],
         "usage": {
-            "prompt_tokens": input_ids.shape[1],
-            "completion_tokens": sum(len(gi) for gi, _ in results),
-            "total_tokens": input_ids.shape[1] + sum(len(gi) for gi, _ in results),
+            "prompt_tokens": len(start_ids),
+            "completion_tokens": len(gen_ids),
+            "total_tokens": len(start_ids) + len(gen_ids),
         },
     }
+
 
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
+
 @app.get("/v1/models")
 async def models():
     return {"data": [{"id": "sec-edgar-gpt-124m", "object": "model", "owned_by": "lzwjava"}]}
+
 
 if __name__ == "__main__":
     import uvicorn
