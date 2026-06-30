@@ -30,6 +30,55 @@ SEC EDGAR filings sourced from the [SEC-EDGAR corpus on HuggingFace](https://hug
 
 ## Usage
 
+### Recommended: native nanoGPT inference
+
+This model was trained with [nanoGPT](https://github.com/karpathy/nanoGPT), and inference works best with the same native code. The checkpoint format, weight layout (`bias=False`), and tokenizer (`tiktoken`) all match directly — no conversion layer needed.
+
+Copy `model.py` from nanoGPT into the same directory, then:
+
+```python
+import torch
+import tiktoken
+from model import GPTConfig, GPT
+
+# Load checkpoint (nanoGPT format)
+checkpoint = torch.load("ckpt.pt", map_location="cuda", weights_only=False)
+gptconf = GPTConfig(**checkpoint["model_args"])
+model = GPT(gptconf)
+state_dict = checkpoint["model"]
+# Strip compilation prefix if present
+unwanted_prefix = "_orig_mod."
+for k, v in list(state_dict.items()):
+    if k.startswith(unwanted_prefix):
+        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+model.load_state_dict(state_dict)
+model.eval()
+model.to("cuda")
+
+# Tokenizer — same tiktoken encoding used during training
+enc = tiktoken.get_encoding("gpt2")
+
+prompt = "UNITED STATES SECURITIES AND EXCHANGE COMMISSION"
+start_ids = enc.encode(prompt, allowed_special={"<|endoftext|>"})
+x = torch.tensor(start_ids, dtype=torch.long, device="cuda")[None, ...]
+y = model.generate(x, max_new_tokens=200, temperature=0.8, top_k=200)
+output = enc.decode(y[0].tolist())
+print(output)
+```
+
+> **Tip:** For a full OpenAI-compatible API server using this approach, see [`server/server.py`](server/server.py).
+
+### HuggingFace transformers (not recommended)
+
+HuggingFace `transformers` can load this model, but there are known issues:
+
+- **`bias=False` mismatch:** nanoGPT trains all linear layers without bias (`bias=False`). HuggingFace's `GPT2LMHeadModel` initialises with `bias=True` by default. The shapes match only because the HF conversion script pads the state dict — but you may get silent quality degradation or warnings.
+- **Checkpoint format:** The raw checkpoint is saved in nanoGPT's format, not HuggingFace's. The HuggingFace Hub version goes through a conversion step that can introduce subtle mismatches.
+- **Tokenizer differences:** HuggingFace wraps `GPT2Tokenizer` around the same BPE merges, but the `encode`/`decode` behaviour (special token handling, whitespace) can differ from the `tiktoken` library used during training. For best fidelity, use `tiktoken` directly.
+- **`generate()` defaults:** HF's `model.generate()` defaults differ from nanoGPT's `generate()` — notably no `top_k` by default, different repetition penalty handling. Results will not be identical.
+
+If you still want to try:
+
 ```python
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 
@@ -38,7 +87,7 @@ tokenizer = GPT2Tokenizer.from_pretrained("lzwjava/sec-edgar-gpt")
 
 prompt = "UNITED STATES SECURITIES AND EXCHANGE COMMISSION"
 input_ids = tokenizer.encode(prompt, return_tensors="pt")
-output = model.generate(input_ids, max_new_tokens=200, temperature=0.8, do_sample=True)
+output = model.generate(input_ids, max_new_tokens=200, temperature=0.8, do_sample=True, top_k=200)
 print(tokenizer.decode(output[0]))
 ```
 
