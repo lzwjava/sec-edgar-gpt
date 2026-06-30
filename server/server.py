@@ -2,9 +2,11 @@
 """OpenAI-compatible API server using native nanoGPT model (no transformers)."""
 import os
 import sys
+import json
 import torch
 import time
 import uuid
+import datetime
 
 # Add model directory to path so we can import model.py
 sys.path.insert(0, os.path.dirname(__file__))
@@ -17,6 +19,7 @@ from model import GPTConfig, GPT
 
 MODEL_DIR = os.path.dirname(__file__)
 CKPT_PATH = os.path.join(MODEL_DIR, "ckpt.pt")
+PROMPT_LOG = os.path.join(MODEL_DIR, "prompts.jsonl")
 app = FastAPI()
 
 print("Loading nanoGPT checkpoint...")
@@ -42,6 +45,25 @@ print(f"Model loaded on GPU. Vocab: {gptconf.vocab_size}, params: {model.get_num
 
 MIN_PROMPT_CHARS = 10
 BLOCK_SIZE = gptconf.block_size  # 1024
+
+
+def _log_interaction(req_id, req_model, endpoint, prompt_text, response_text, usage, latency_ms):
+    """Log a full request/response pair to prompts.jsonl."""
+    record = {
+        "id": req_id,
+        "model": req_model,
+        "endpoint": endpoint,
+        "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+        "prompt": prompt_text,
+        "response": response_text,
+        "usage": usage,
+        "latency_ms": round(latency_ms, 1),
+    }
+    try:
+        with open(PROMPT_LOG, "a") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception:
+        pass  # don't crash the server if logging fails
 
 
 def _generate(input_ids, max_new_tokens, temperature, top_k):
@@ -86,9 +108,10 @@ async def completions(req: CompletionRequest):
     x = torch.tensor(start_ids, dtype=torch.long, device="cuda")[None, ...]
     t0 = time.time()
     y = _generate(x, req.max_tokens, req.temperature, req.top_k)
+    latency = (time.time() - t0) * 1000
     gen_ids = y[0][len(start_ids):]
     text = enc.decode(gen_ids.tolist())
-    return {
+    result = {
         "id": f"cmpl-{uuid.uuid4().hex[:8]}",
         "object": "text_completion",
         "created": int(time.time()),
@@ -100,6 +123,12 @@ async def completions(req: CompletionRequest):
             "total_tokens": len(start_ids) + len(gen_ids),
         },
     }
+    _log_interaction(
+        req_id=result["id"], req_model=req.model, endpoint="completions",
+        prompt_text=req.prompt, response_text=text,
+        usage=result["usage"], latency_ms=latency,
+    )
+    return result
 
 
 @app.post("/v1/chat/completions")
@@ -111,9 +140,10 @@ async def chat_completions(req: ChatRequest):
     x = torch.tensor(start_ids, dtype=torch.long, device="cuda")[None, ...]
     t0 = time.time()
     y = _generate(x, req.max_tokens, req.temperature, req.top_k)
+    latency = (time.time() - t0) * 1000
     gen_ids = y[0][len(start_ids):]
     text = enc.decode(gen_ids.tolist())
-    return {
+    result = {
         "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
         "object": "chat.completion",
         "created": int(time.time()),
@@ -125,6 +155,12 @@ async def chat_completions(req: ChatRequest):
             "total_tokens": len(start_ids) + len(gen_ids),
         },
     }
+    _log_interaction(
+        req_id=result["id"], req_model=req.model, endpoint="chat_completions",
+        prompt_text=user_text, response_text=text.strip(),
+        usage=result["usage"], latency_ms=latency,
+    )
+    return result
 
 
 @app.get("/health")
