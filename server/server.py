@@ -11,7 +11,7 @@ import datetime
 # Add model directory to path so we can import model.py
 sys.path.insert(0, os.path.dirname(__file__))
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List
@@ -47,7 +47,7 @@ MIN_PROMPT_CHARS = 10
 BLOCK_SIZE = gptconf.block_size  # 1024
 
 
-def _log_interaction(req_id, req_model, endpoint, prompt_text, response_text, usage, latency_ms):
+def _log_interaction(req_id, req_model, endpoint, prompt_text, response_text, usage, latency_ms, headers=None):
     """Log a full request/response pair to prompts.jsonl."""
     record = {
         "id": req_id,
@@ -59,11 +59,24 @@ def _log_interaction(req_id, req_model, endpoint, prompt_text, response_text, us
         "usage": usage,
         "latency_ms": round(latency_ms, 1),
     }
+    if headers:
+        record["headers"] = headers
     try:
         with open(PROMPT_LOG, "a") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
     except Exception:
         pass  # don't crash the server if logging fails
+
+
+def _extract_headers(request: Request) -> dict:
+    """Extract client-identifying headers from the incoming request."""
+    wanted = ["user-agent", "referer", "origin", "x-forwarded-for", "x-real-ip", "cf-connecting-ip"]
+    h = {}
+    for key in wanted:
+        val = request.headers.get(key)
+        if val:
+            h[key] = val
+    return h
 
 
 def _generate(input_ids, max_new_tokens, temperature, top_k):
@@ -101,7 +114,7 @@ async def index():
 
 
 @app.post("/v1/completions")
-async def completions(req: CompletionRequest):
+async def completions(req: CompletionRequest, request: Request):
     if len(req.prompt.strip()) < MIN_PROMPT_CHARS:
         raise HTTPException(400, f"Prompt must be at least {MIN_PROMPT_CHARS} characters")
     start_ids = enc.encode(req.prompt, allowed_special={"<|endoftext|>"})
@@ -127,12 +140,13 @@ async def completions(req: CompletionRequest):
         req_id=result["id"], req_model=req.model, endpoint="completions",
         prompt_text=req.prompt, response_text=text,
         usage=result["usage"], latency_ms=latency,
+        headers=_extract_headers(request),
     )
     return result
 
 
 @app.post("/v1/chat/completions")
-async def chat_completions(req: ChatRequest):
+async def chat_completions(req: ChatRequest, request: Request):
     user_text = "\n".join(f"{m.role}: {m.content}" for m in req.messages)
     if len(user_text.strip()) < MIN_PROMPT_CHARS:
         raise HTTPException(400, f"Message must be at least {MIN_PROMPT_CHARS} characters")
@@ -159,6 +173,7 @@ async def chat_completions(req: ChatRequest):
         req_id=result["id"], req_model=req.model, endpoint="chat_completions",
         prompt_text=user_text, response_text=text.strip(),
         usage=result["usage"], latency_ms=latency,
+        headers=_extract_headers(request),
     )
     return result
 
